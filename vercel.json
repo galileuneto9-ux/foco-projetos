@@ -1,0 +1,9 @@
+{
+  "crons": [
+    { "path": "/api/cron/manha", "schedule": "0 11 * * *" },
+    { "path": "/api/cron/noite", "schedule": "0 21 * * *" },
+    { "path": "/api/cron/parado", "schedule": "30 11 * * *" },
+    { "path": "/api/cron/semanal", "schedule": "0 19 * * 5" },
+    { "path": "/api/cron/resumo", "schedule": "0 11 * * 1" }
+  ]
+}

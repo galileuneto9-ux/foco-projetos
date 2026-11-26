@@ -1,0 +1,2 @@
+-- Sem seed de produção e sem senha neste arquivo.
+-- Usuários de teste: `npm run seed:dev` (só URL local, senha aleatória impressa uma vez).

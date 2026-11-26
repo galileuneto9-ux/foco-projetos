@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+:root {
+  --papel: #ede6d9;
+  --creme: #fbf8f2;
+  --tinta: #2c2416;
+  --oliva: #5c6b3a;
+  --ocre: #b45309;
+  --argila: #9b2c2c;
+  --borda: #d6cbb8;
+  --tinta-suave: #6b6254;
+  --tinta-terciaria: #8a8174;
+  --oliva-suave: #e7ecdd;
+  --ocre-suave: #f8ead8;
+  --argila-suave: #f3e4e4;
+  --baixo-suave: #efeae2;
+  --creme-hover: #f3eee4;
+  --background: var(--papel);
+  --foreground: var(--tinta);
+  --card: var(--creme);
+  --primary: var(--oliva);
+  --primary-foreground: var(--creme);
+  --muted: var(--creme-hover);
+  --muted-foreground: var(--tinta-suave);
+  --border: var(--borda);
+  --destructive: var(--argila);
+  --accent: var(--oliva-suave);
+  --radius: 0.9rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent: var(--accent);
+  --color-papel: var(--papel);
+  --color-creme: var(--creme);
+  --color-tinta: var(--tinta);
+  --color-oliva: var(--oliva);
+  --color-ocre: var(--ocre);
+  --color-argila: var(--argila);
+  --color-borda: var(--borda);
+  --color-suave: var(--tinta-suave);
+  --color-terciaria: var(--tinta-terciaria);
+  --color-oliva-suave: var(--oliva-suave);
+  --color-ocre-suave: var(--ocre-suave);
+  --color-argila-suave: var(--argila-suave);
+  --color-baixo-suave: var(--baixo-suave);
+  --color-creme-hover: var(--creme-hover);
+  --font-sans: var(--font-sans);
+  --font-serif: var(--font-serif);
+  --radius-lg: var(--radius);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), sans-serif;
+}
+
+.font-serif {
+  font-family: var(--font-serif), Georgia, serif;
+}
