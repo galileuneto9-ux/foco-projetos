@@ -62,6 +62,8 @@ export function ProjectEditor({
     nextMilestone: string;
     nextMilestoneOn: string;
     chargeOn: string;
+    priority: "importante" | "medio" | "baixo";
+    dueDate: string;
   };
 }) {
   const [message, setMessage] = useState<string | null>(null);
@@ -80,6 +82,16 @@ export function ProjectEditor({
       </Field>
       <Field label="Ideia solta" htmlFor="brief" error={form.formState.errors.brief?.message}>
         <Textarea id="brief" {...form.register("brief")} />
+      </Field>
+      <Field label="Prioridade" htmlFor="priority">
+        <select id="priority" className="min-h-11 w-full rounded-xl border border-border bg-card px-3" {...form.register("priority")}>
+          <option value="importante">Importante</option>
+          <option value="medio">Médio</option>
+          <option value="baixo">Baixo</option>
+        </select>
+      </Field>
+      <Field label="Prazo" htmlFor="dueDate" hint="Se ficar vazio, o projeto aparece como sem prazo.">
+        <Input id="dueDate" type="date" {...form.register("dueDate")} />
       </Field>
       <Field label="Quem vê" htmlFor="visibility">
         <select id="visibility" className="min-h-11 w-full rounded-xl border border-border bg-card px-3" {...form.register("visibility")}>
@@ -149,8 +161,8 @@ export function BreakSteps({ projectId }: { projectId: string }) {
               <Input
                 aria-label={`Minutos ${index + 1}`}
                 type="number"
-                min={15}
-                max={30}
+                min={5}
+                max={25}
                 value={step.minutes}
                 onChange={(event) =>
                   setSteps(
@@ -201,7 +213,7 @@ export function ManualStepForm({ projectId }: { projectId: string }) {
         <Textarea id="done" {...form.register("doneWhen")} />
       </Field>
       <Field label="Minutos" htmlFor="minutes" error={form.formState.errors.minutes?.message}>
-        <Input id="minutes" type="number" min={15} max={30} {...form.register("minutes")} />
+        <Input id="minutes" type="number" min={5} max={25} {...form.register("minutes")} />
       </Field>
       <Button type="submit" variant="outline">
         Adicionar passo

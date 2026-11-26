@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import { Figtree, Fraunces } from "next/font/google";
+import { Fraunces, Nunito_Sans } from "next/font/google";
 import { RecoveryListener } from "@/components/recovery-listener";
 import "./globals.css";
 
-const sans = Figtree({ subsets: ["latin"], variable: "--font-sans" });
-const serif = Fraunces({ subsets: ["latin"], variable: "--font-serif" });
+const sans = Nunito_Sans({ subsets: ["latin"], weight: ["400", "600", "700"], variable: "--font-sans" });
+const serif = Fraunces({ subsets: ["latin"], weight: ["400", "600"], variable: "--font-serif" });
 
 export const metadata: Metadata = {
   title: "Foco nos Projetos",

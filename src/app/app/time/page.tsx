@@ -6,6 +6,8 @@ import { ChargeControls, CopyTextButton } from "@/components/charge-controls";
 import { ProgressBlock } from "@/components/progress-bar";
 import { Card } from "@/components/ui/card";
 import { requireMember } from "@/server/session";
+import { loadTeamColumn } from "@/server/team-snapshot";
+import { TeamColumn } from "@/components/team-column";
 import type { BoardFlag } from "@/domain/types";
 import type { Urgency } from "@/domain/focus";
 
@@ -16,9 +18,9 @@ const URGENCY_LABEL: Record<Urgency, string> = {
 };
 
 const URGENCY_CLASS: Record<Urgency, string> = {
-  verde: "border-l-4 border-l-primary",
-  amarelo: "border-l-4 border-l-[#b8860b] bg-[#fbf6e4]",
-  vermelho: "border-l-4 border-l-destructive bg-[#fbeceb]",
+  verde: "border-l-4 border-l-oliva bg-oliva-suave",
+  amarelo: "border-l-4 border-l-ocre bg-ocre-suave",
+  vermelho: "border-l-4 border-l-argila bg-argila-suave",
 };
 
 export default async function TeamPage({
@@ -42,15 +44,16 @@ export default async function TeamPage({
     .eq("visibility", "compartilhado");
   const ids = (projects ?? []).map((project) => project.id);
   const { data: steps } = ids.length
-    ? await supabase.from("project_steps").select("project_id, status").in("project_id", ids)
+    ? await supabase.from("tasks").select("project_id, status").in("project_id", ids)
     : { data: [] };
   const counts = new Map<string, { done: number; total: number }>();
   for (const step of steps ?? []) {
     const current = counts.get(step.project_id) ?? { done: 0, total: 0 };
     current.total += 1;
-    if (step.status === "feito" || step.status === "pulado") current.done += 1;
+    if (step.status === "feita" || step.status === "pulada") current.done += 1;
     counts.set(step.project_id, current);
   }
+  const board = await loadTeamColumn(supabase, member.team_id, today);
   const cards = (projects ?? [])
     .map((project) => {
       const flag = effectiveBoardFlag({
@@ -143,6 +146,18 @@ export default async function TeamPage({
           <ProgressBlock done={project.done} total={project.total} milestoneOn={project.next_milestone_on} compact />
         </Card>
       ))}
+      <section className="grid gap-2 min-[1100px]:hidden">
+        <TeamColumn people={board.people} ranked={board.ranked} />
+      </section>
+      <section className="grid gap-2">
+        <h2 className="font-serif text-2xl">Tarefas avulsas</h2>
+        {board.loose.length === 0 ? <p className="text-sm text-muted-foreground">Nenhuma tarefa avulsa compartilhada.</p> : null}
+        {board.loose.map((task) => (
+          <p key={task.id} className="text-sm">
+            {task.title}
+          </p>
+        ))}
+      </section>
       <section className="grid gap-3">
         <h2 className="font-serif text-2xl">Entregas da semana</h2>
         {deliveryLines.length === 0 ? <p className="text-sm text-muted-foreground">Nada concluído nesta semana.</p> : null}

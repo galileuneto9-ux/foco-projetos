@@ -1,16 +1,30 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f4efe4;
-  --foreground: #1d1914;
-  --card: #fffaf3;
-  --primary: #1f6b4a;
-  --primary-foreground: #f6fbf7;
-  --muted: #e7e0d2;
-  --muted-foreground: #5c564c;
-  --border: #ddd3c2;
-  --destructive: #8d3b32;
-  --accent: #e5f2eb;
+  --papel: #ede6d9;
+  --creme: #fbf8f2;
+  --tinta: #2c2416;
+  --oliva: #5c6b3a;
+  --ocre: #b45309;
+  --argila: #9b2c2c;
+  --borda: #d6cbb8;
+  --tinta-suave: #6b6254;
+  --tinta-terciaria: #8a8174;
+  --oliva-suave: #e7ecdd;
+  --ocre-suave: #f8ead8;
+  --argila-suave: #f3e4e4;
+  --baixo-suave: #efeae2;
+  --creme-hover: #f3eee4;
+  --background: var(--papel);
+  --foreground: var(--tinta);
+  --card: var(--creme);
+  --primary: var(--oliva);
+  --primary-foreground: var(--creme);
+  --muted: var(--creme-hover);
+  --muted-foreground: var(--tinta-suave);
+  --border: var(--borda);
+  --destructive: var(--argila);
+  --accent: var(--oliva-suave);
   --radius: 0.9rem;
 }
 
@@ -25,6 +39,20 @@
   --color-border: var(--border);
   --color-destructive: var(--destructive);
   --color-accent: var(--accent);
+  --color-papel: var(--papel);
+  --color-creme: var(--creme);
+  --color-tinta: var(--tinta);
+  --color-oliva: var(--oliva);
+  --color-ocre: var(--ocre);
+  --color-argila: var(--argila);
+  --color-borda: var(--borda);
+  --color-suave: var(--tinta-suave);
+  --color-terciaria: var(--tinta-terciaria);
+  --color-oliva-suave: var(--oliva-suave);
+  --color-ocre-suave: var(--ocre-suave);
+  --color-argila-suave: var(--argila-suave);
+  --color-baixo-suave: var(--baixo-suave);
+  --color-creme-hover: var(--creme-hover);
   --font-sans: var(--font-sans);
   --font-serif: var(--font-serif);
   --radius-lg: var(--radius);

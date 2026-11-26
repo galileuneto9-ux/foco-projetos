@@ -55,6 +55,8 @@ export async function createProject(input: unknown) {
       next_milestone: parsed.data.nextMilestone || null,
       next_milestone_on: parsed.data.nextMilestoneOn || null,
       charge_on: parsed.data.chargeOn || null,
+      priority: parsed.data.priority,
+      due_date: parsed.data.dueDate || null,
       status: "fila",
       position: await nextPosition(supabase, user.id),
     })
@@ -77,6 +79,8 @@ export async function updateProject(projectId: string, input: unknown) {
       next_milestone: parsed.data.nextMilestone || null,
       next_milestone_on: parsed.data.nextMilestoneOn || null,
       charge_on: parsed.data.chargeOn || null,
+      priority: parsed.data.priority,
+      due_date: parsed.data.dueDate || null,
     })
     .eq("id", projectId);
   if (error) return { ok: false as const, message: dbError(error, "Não foi possível salvar.") };
@@ -165,20 +169,21 @@ export async function saveSteps(projectId: string, steps: StepDraft[]) {
     return { ok: false as const, message: error instanceof Error ? error.message : "Confira os passos." };
   }
   if (normalized.length === 0) return { ok: false as const, message: "Nenhum passo para gravar." };
-  const { supabase, member } = await requireMember();
+  const { supabase, user, member } = await requireMember();
   if (!member) return { ok: false as const, message: "Sem time." };
   const { data: project } = await supabase.from("projects").select("id, team_id").eq("id", projectId).maybeSingle();
   if (!project) return { ok: false as const, message: "Projeto não encontrado." };
   const { data: current } = await supabase
-    .from("project_steps")
+    .from("tasks")
     .select("id")
     .eq("project_id", projectId)
-    .eq("status", "atual")
+    .eq("status", "em_andamento")
     .maybeSingle();
   const { data: last } = await supabase
-    .from("project_steps")
+    .from("tasks")
     .select("position")
     .eq("project_id", projectId)
+    .is("parent_task_id", null)
     .order("position", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -186,13 +191,15 @@ export async function saveSteps(projectId: string, steps: StepDraft[]) {
   const rows = normalized.map((step, index) => ({
     team_id: project.team_id,
     project_id: projectId,
+    owner_id: user.id,
+    assignee_id: user.id,
     title: step.title,
     done_when: step.doneWhen,
     minutes: step.minutes,
-    status: !current && index === 0 ? "atual" : "pendente",
+    status: !current && index === 0 ? "em_andamento" : "aberta",
     position: position++,
   }));
-  const { error } = await supabase.from("project_steps").insert(rows);
+  const { error } = await supabase.from("tasks").insert(rows);
   if (error) return { ok: false as const, message: dbError(error, "Não foi possível gravar os passos.") };
   revalidatePath(`/app/projetos/${projectId}`);
   revalidatePath("/app");
@@ -209,7 +216,7 @@ export async function addManualStep(projectId: string, input: unknown) {
 
 export async function setCurrentStep(stepId: string, projectId: string) {
   const { supabase } = await requireMember();
-  const { error } = await supabase.rpc("set_current_step", { p_step: stepId });
+  const { error } = await supabase.rpc("set_current_task", { p_task: stepId });
   if (error) return { ok: false as const, message: dbError(error, "Não foi possível definir o passo.") };
   revalidatePath("/app");
   revalidatePath(`/app/projetos/${projectId}`);
@@ -218,7 +225,7 @@ export async function setCurrentStep(stepId: string, projectId: string) {
 
 export async function completeStep(stepId: string) {
   const { supabase } = await requireMember();
-  const { error } = await supabase.rpc("complete_step", { p_step: stepId });
+  const { error } = await supabase.rpc("complete_task", { p_task: stepId });
   if (error) return { ok: false as const, message: dbError(error, "Não foi possível concluir.") };
   revalidatePath("/app");
   revalidatePath("/app/historico");
@@ -227,7 +234,7 @@ export async function completeStep(stepId: string) {
 
 export async function skipStep(stepId: string) {
   const { supabase } = await requireMember();
-  const { error } = await supabase.rpc("skip_step", { p_step: stepId });
+  const { error } = await supabase.rpc("skip_task", { p_task: stepId });
   if (error) return { ok: false as const, message: dbError(error, "Não foi possível pular.") };
   revalidatePath("/app");
   return { ok: true as const };
@@ -236,10 +243,10 @@ export async function skipStep(stepId: string) {
 export async function proposeTinyStep(projectId: string) {
   const { supabase } = await requireMember();
   const { data: current } = await supabase
-    .from("project_steps")
+    .from("tasks")
     .select("title")
     .eq("project_id", projectId)
-    .eq("status", "atual")
+    .eq("status", "em_andamento")
     .maybeSingle();
   const { data: project } = await supabase.from("projects").select("title").eq("id", projectId).maybeSingle();
   if (!project) return { ok: false as const, message: "Projeto não encontrado." };
@@ -251,7 +258,7 @@ export async function acceptTinyStep(projectId: string, step: StepDraft) {
   if (!saved.ok) return saved;
   const { supabase } = await requireMember();
   const { data: created } = await supabase
-    .from("project_steps")
+    .from("tasks")
     .select("id")
     .eq("project_id", projectId)
     .eq("title", step.title)
@@ -259,7 +266,7 @@ export async function acceptTinyStep(projectId: string, step: StepDraft) {
     .limit(1)
     .maybeSingle();
   if (!created) return { ok: false as const, message: "O passo curto não entrou." };
-  const { error } = await supabase.rpc("set_current_step", { p_step: created.id });
+  const { error } = await supabase.rpc("set_current_task", { p_task: created.id });
   if (error) return { ok: false as const, message: dbError(error, "Não foi possível trocar o passo.") };
   revalidatePath("/app");
   return { ok: true as const, message: "O passo de 5 minutos é o atual." };

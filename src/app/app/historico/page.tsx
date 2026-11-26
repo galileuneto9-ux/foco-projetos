@@ -9,7 +9,7 @@ export default async function HistoryPage() {
     .select("id, title, completed_at, project_id")
     .eq("user_id", user.id)
     .order("completed_at", { ascending: false });
-  const projectIds = [...new Set((deliveries ?? []).map((row) => row.project_id))];
+  const projectIds = [...new Set((deliveries ?? []).map((row) => row.project_id).filter((id): id is string => Boolean(id)))];
   const { data: projects } = projectIds.length
     ? await supabase.from("projects").select("id, title").in("id", projectIds)
     : { data: [] };
@@ -18,13 +18,17 @@ export default async function HistoryPage() {
   for (const delivery of deliveries ?? []) {
     const day = String(delivery.completed_at).slice(0, 10);
     const list = groups.get(day) ?? [];
-    list.push({ id: delivery.id, title: delivery.title, project: titles.get(delivery.project_id) ?? "Projeto" });
+    list.push({
+      id: delivery.id,
+      title: delivery.title,
+      project: delivery.project_id ? titles.get(delivery.project_id) ?? "Projeto" : "Tarefa avulsa",
+    });
     groups.set(day, list);
   }
   return (
     <div className="grid gap-5">
       <h1 className="font-serif text-3xl">Histórico</h1>
-      {groups.size === 0 ? <p className="text-sm text-muted-foreground">Quando um passo for concluído, ele aparece aqui.</p> : null}
+      {groups.size === 0 ? <p className="text-sm text-muted-foreground">Quando uma tarefa for concluída, ela aparece aqui.</p> : null}
       {[...groups.entries()].map(([day, items]) => (
         <section key={day} className="grid gap-2">
           <h2 className="text-sm text-muted-foreground">{formatDatePt(day)}</h2>

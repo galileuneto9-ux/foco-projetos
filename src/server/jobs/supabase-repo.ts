@@ -101,10 +101,10 @@ export class SupabaseJobRepo implements JobRepository {
     const stepsByProject = new Map<string, { id: string; title: string; done_when: string; minutes: number }>();
     if (ids.length > 0) {
       const { data: steps, error: stepError } = await this.admin
-        .from("project_steps")
+        .from("tasks")
         .select("id, project_id, title, done_when, minutes")
         .in("project_id", ids)
-        .eq("status", "atual");
+        .eq("status", "em_andamento");
       if (stepError) fail("steps", stepError);
       for (const step of steps ?? []) stepsByProject.set(step.project_id, step);
     }

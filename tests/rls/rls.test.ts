@@ -74,19 +74,20 @@ async function tryQuery(client: pg.PoolClient, sql: string, params: unknown[] = 
 }
 
 beforeAll(async () => {
+  const root = path.resolve(__dirname, "../..");
   const admin = await pool.connect();
   try {
     await admin.query("drop schema if exists public cascade");
     await admin.query("drop schema if exists auth cascade");
     await admin.query("create schema public");
     await admin.query("grant all on schema public to public");
-    const root = path.resolve(__dirname, "../..");
     for (const file of [
       "tests/rls/prelude.sql",
       "supabase/migrations/20261126120000_schema.sql",
       "supabase/migrations/20261126120100_rls.sql",
       "supabase/migrations/20261126180000_foco_ux.sql",
       "supabase/migrations/20261126193000_limpa_prefixos_passos.sql",
+      "supabase/migrations/20261126200000_tarefas_e_placar.sql",
     ]) {
       await admin.query(readFileSync(path.join(root, file), "utf8"));
     }
@@ -199,6 +200,7 @@ beforeAll(async () => {
     );
     await fixture.query("insert into public.google_oauth_secrets (team_id, ciphertext) values ($1, 'ciphertext')", [ids.teamA]);
     await fixture.query("insert into public.webhook_receipts (id, team_id) values ('msg-1', $1)", [ids.teamA]);
+    await fixture.query(readFileSync(path.join(root, "supabase/migrations/20261126200000_tarefas_e_placar.sql"), "utf8"));
   } finally {
     fixture.release();
   }
@@ -339,17 +341,24 @@ test("migration limpa prefixo de modelo aninhado no título", async () => {
 
 test("minutos fora de 5–25 e dois passos atuais são recusados", async () => {
   await withRole(ownerA, "authenticated", async (client) => {
+    const legacy = await tryQuery(
+      client,
+      "insert into public.project_steps (team_id, project_id, title, done_when, minutes, position) values ($1, $2, 'Curto', 'Pronto', 8, 2)",
+      [ids.teamA, ids.privateA],
+    );
+    expect(legacy.ok).toBe(false);
+    if (!legacy.ok) expect(legacy.code).toBe("42501");
     const minutes = await tryQuery(
       client,
-      "insert into public.project_steps (team_id, project_id, title, done_when, minutes, position) values ($1, $2, 'Curto', 'Pronto', 4, 2)",
-      [ids.teamA, ids.privateA],
+      "insert into public.tasks (team_id, project_id, owner_id, assignee_id, title, minutes, position) values ($1, $2, $3, $3, 'Curto', 4, 8)",
+      [ids.teamA, ids.privateA, ownerA],
     );
     expect(minutes.ok).toBe(false);
     if (!minutes.ok) expect(minutes.code).toBe("23514");
     const secondCurrent = await tryQuery(
       client,
-      "insert into public.project_steps (team_id, project_id, title, done_when, minutes, status, position) values ($1, $2, 'Outro atual', 'Pronto', 20, 'atual', 3)",
-      [ids.teamA, ids.privateA],
+      "insert into public.tasks (team_id, project_id, owner_id, assignee_id, title, status, position) values ($1, $2, $3, $3, 'Outro atual', 'em_andamento', 9)",
+      [ids.teamA, ids.privateA, ownerA],
     );
     expect(secondCurrent.ok).toBe(false);
     if (!secondCurrent.ok) expect(secondCurrent.code).toBe("23505");
@@ -446,21 +455,169 @@ test("membro não conclui passo de outra pessoa e o service role enxerga o priva
   });
 });
 
-test("owner do projeto conclui o passo, gera entrega e promove o próximo", async () => {
+test("owner do projeto conclui a tarefa, gera entrega e promove o próximo", async () => {
   await withRole(ownerA, "authenticated", async (client) => {
+    const current = await client.query("select id from public.tasks where legacy_step_id = $1", [ids.stepPrivate]);
     await client.query(
-      "insert into public.project_steps (team_id, project_id, title, done_when, minutes, status, position) values ($1, $2, 'Depois', 'Revisado', 15, 'pendente', 2)",
-      [ids.teamA, ids.privateA],
+      "insert into public.tasks (team_id, project_id, owner_id, assignee_id, title, status, position) values ($1, $2, $3, $3, 'Depois', 'aberta', 2)",
+      [ids.teamA, ids.privateA, ownerA],
     );
-    const done = await tryQuery(client, "select public.complete_step($1)", [ids.stepPrivate]);
+    const done = await tryQuery(client, "select public.complete_task($1)", [current.rows[0].id]);
     expect(done.ok).toBe(true);
-    const delivery = await client.query("select title from public.deliveries where step_id = $1", [ids.stepPrivate]);
+    const delivery = await client.query("select title from public.deliveries where task_id = $1", [current.rows[0].id]);
     expect(delivery.rows[0]?.title).toBe("Passo privado");
-    const next = await client.query("select title, status from public.project_steps where project_id = $1 and status = 'atual'", [
+    const next = await client.query("select title, status from public.tasks where project_id = $1 and status = 'em_andamento'", [
       ids.privateA,
     ]);
     expect(next.rows[0]?.title).toBe("Depois");
     const progress = await client.query("select last_progress_at from public.projects where id = $1", [ids.privateA]);
     expect(progress.rows[0]?.last_progress_at).toBeTruthy();
+    const points = await client.query("select points from public.point_events where source_id = $1", [current.rows[0].id]);
+    expect(points.rows[0]?.points).toBe(2);
+  });
+});
+
+test("a cópia dos passos vira tarefa sem apagar o passo", async () => {
+  await withRole(ownerA, "authenticated", async (client) => {
+    const copied = await client.query(
+      "select status, priority, visibility from public.tasks where legacy_step_id = $1",
+      [ids.stepPrivate],
+    );
+    expect(copied.rows[0]).toMatchObject({ status: "em_andamento", priority: null, visibility: null });
+    const original = await client.query("select title from public.project_steps where id = $1", [ids.stepPrivate]);
+    expect(original.rows[0]?.title).toBe("Passo privado");
+    const shared = await client.query("select id from public.tasks where legacy_step_id = $1", [ids.stepShared]);
+    expect(shared.rowCount).toBe(1);
+  });
+});
+
+test("tarefa de item compartilhado aparece para o time; nota e tarefa privada não", async () => {
+  await withRole(memberA, "authenticated", async (client) => {
+    const shared = await client.query("select title from public.tasks where project_id = $1", [ids.sharedA]);
+    expect(shared.rows.map((row) => row.title)).toContain("Passo compartilhado");
+    const hidden = await client.query("select id from public.tasks where project_id = $1", [ids.privateA]);
+    expect(hidden.rowCount).toBe(0);
+    const notes = await client.query("select id from public.project_notes");
+    expect(notes.rowCount).toBe(0);
+    const deliveries = await client.query("select title from public.deliveries");
+    const titles = deliveries.rows.map((row) => row.title);
+    expect(titles).toContain("Entrega compartilhada");
+    expect(titles).not.toContain("Entrega privada");
+  });
+  await withRole(ownerB, "authenticated", async (client) => {
+    const tasks = await client.query("select id from public.tasks where team_id = $1", [ids.teamA]);
+    expect(tasks.rowCount).toBe(0);
+  });
+  await withRole(null, "anon", async (client) => {
+    const tasks = await tryQuery(client, "select id from public.tasks");
+    expect(tasks.ok).toBe(false);
+    if (!tasks.ok) expect(tasks.code).toBe("42501");
+  });
+});
+
+test("tarefa privada não aceita outro responsável e o terceiro nível é recusado", async () => {
+  await withRole(ownerA, "authenticated", async (client) => {
+    const assigned = await tryQuery(
+      client,
+      "insert into public.tasks (team_id, owner_id, assignee_id, title, visibility, priority, position) values ($1, $2, $3, 'Alheia', 'privado', 'medio', 4)",
+      [ids.teamA, ownerA, memberA],
+    );
+    expect(assigned.ok).toBe(false);
+    if (!assigned.ok) expect(assigned.message).toMatch(/ATRIBUICAO_PRIVADA/);
+    const parent = await client.query(
+      "insert into public.tasks (team_id, project_id, owner_id, assignee_id, title, position) values ($1, $2, $3, $3, 'Pai', 4) returning id",
+      [ids.teamA, ids.privateA, ownerA],
+    );
+    const child = await client.query(
+      "insert into public.tasks (team_id, project_id, parent_task_id, owner_id, assignee_id, title, position) values ($1, $2, $3, $4, $4, 'Filha', 0) returning id",
+      [ids.teamA, ids.privateA, parent.rows[0].id, ownerA],
+    );
+    await client.query("select public.move_task($1, -1)", [parent.rows[0].id]);
+    const stillChild = await client.query("select parent_task_id from public.tasks where id = $1", [child.rows[0].id]);
+    expect(stillChild.rows[0]?.parent_task_id).toBe(parent.rows[0].id);
+    const grandchild = await tryQuery(
+      client,
+      "insert into public.tasks (team_id, project_id, parent_task_id, owner_id, assignee_id, title, position) values ($1, $2, $3, $4, $4, 'Neta', 0)",
+      [ids.teamA, ids.privateA, child.rows[0].id, ownerA],
+    );
+    expect(grandchild.ok).toBe(false);
+    if (!grandchild.ok) expect(grandchild.message).toMatch(/NIVEL_3/);
+    await client.query("select public.outdent_task($1)", [child.rows[0].id]);
+    const raised = await client.query("select parent_task_id is null as root from public.tasks where id = $1", [child.rows[0].id]);
+    expect(raised.rows[0]?.root).toBe(true);
+  });
+});
+
+test("pontos não somem, não duplicam e o privado não entra no placar do colega", async () => {
+  await withRole(ownerA, "authenticated", async (client) => {
+    await client.query("update public.projects set priority = 'importante', visibility = 'compartilhado' where id = $1", [ids.privateA]);
+    const task = await client.query(
+      "insert into public.tasks (team_id, project_id, owner_id, assignee_id, title, status, position) values ($1, $2, $3, $3, 'Entregar', 'aberta', 6) returning id",
+      [ids.teamA, ids.privateA, ownerA],
+    );
+    const loose = await client.query(
+      "insert into public.tasks (team_id, owner_id, assignee_id, title, priority, visibility, position) values ($1, $2, $2, 'Avulsa', 'importante', 'privado', 7) returning id",
+      [ids.teamA, ownerA],
+    );
+    await client.query("select public.complete_task($1)", [task.rows[0].id]);
+    await client.query("select public.complete_task($1)", [loose.rows[0].id]);
+    await client.query("update public.projects set status = 'concluido' where id = $1", [ids.privateA]);
+    const again = await client.query("update public.tasks set status = 'aberta' where id = $1", [task.rows[0].id]);
+    expect(again.rowCount).toBe(1);
+    await client.query("update public.tasks set status = 'feita' where id = $1", [task.rows[0].id]);
+    const rows = await client.query(
+      "select source_kind, points, visibility from public.point_events where source_id in ($1, $2, $3) order by source_kind, points",
+      [task.rows[0].id, loose.rows[0].id, ids.privateA],
+    );
+    expect(rows.rows).toEqual([
+      { source_kind: "project", points: 30, visibility: "compartilhado" },
+      { source_kind: "task", points: 3, visibility: "compartilhado" },
+      { source_kind: "task", points: 30, visibility: "privado" },
+    ]);
+    const removed = await tryQuery(client, "delete from public.point_events where source_id = $1", [task.rows[0].id]);
+    expect(removed.ok).toBe(false);
+    const edited = await tryQuery(client, "update public.point_events set points = 1 where source_id = $1", [loose.rows[0].id]);
+    expect(edited.ok).toBe(false);
+    await client.query("update public.projects set visibility = 'privado' where id = $1", [ids.privateA]);
+    await client.query("set local role authenticated");
+    await setClaims(client, memberA, "authenticated");
+    const seen = await client.query("select points, visibility from public.point_events where team_id = $1 order by points", [ids.teamA]);
+    expect(seen.rows).toEqual([{ points: 3, visibility: "compartilhado" }, { points: 30, visibility: "compartilhado" }]);
+    const hiddenTask = await client.query("select id from public.tasks where id = $1", [task.rows[0].id]);
+    expect(hiddenTask.rowCount).toBe(0);
+  });
+});
+
+test("pular não pontua, a semana começa na segunda em São Paulo e avulsa não conta no teto", async () => {
+  await withRole(ownerA, "authenticated", async (client) => {
+    const task = await client.query(
+      "insert into public.tasks (team_id, project_id, owner_id, assignee_id, title, position) values ($1, $2, $3, $3, 'Pular isto', 8) returning id",
+      [ids.teamA, ids.sharedA, ownerA],
+    );
+    await client.query("select public.skip_task($1)", [task.rows[0].id]);
+    const points = await client.query("select id from public.point_events where source_id = $1", [task.rows[0].id]);
+    expect(points.rowCount).toBe(0);
+    const child = await client.query(
+      "insert into public.tasks (team_id, project_id, parent_task_id, owner_id, assignee_id, title, position) values ($1, $2, $3, $4, $4, 'Dentro', 0) returning id",
+      [ids.teamA, ids.sharedA, task.rows[0].id, ownerA],
+    );
+    const current = await client.query("select id from public.tasks where legacy_step_id = $1", [ids.stepShared]);
+    await client.query("select public.complete_task($1)", [current.rows[0].id]);
+    const promoted = await client.query("select id, status from public.tasks where id = $1", [child.rows[0].id]);
+    expect(promoted.rows[0]?.status).toBe("em_andamento");
+    const sunday = await client.query("select to_char(public.week_start_sao_paulo('2026-11-23 02:30:00+00'), 'YYYY-MM-DD') as week");
+    const monday = await client.query("select to_char(public.week_start_sao_paulo('2026-11-23 03:00:00+00'), 'YYYY-MM-DD') as week");
+    expect(sunday.rows[0].week).toBe("2026-11-16");
+    expect(monday.rows[0].week).toBe("2026-11-23");
+    for (const position of [10, 11, 12, 13]) {
+      const created = await tryQuery(
+        client,
+        "insert into public.tasks (team_id, owner_id, assignee_id, title, position) values ($1, $2, $2, $3, $4)",
+        [ids.teamA, ownerA, `Avulsa ${position}`, position],
+      );
+      expect(created.ok).toBe(true);
+    }
+    const active = await client.query("select id from public.projects where owner_id = $1 and status = 'ativo'", [ownerA]);
+    expect(active.rowCount).toBe(2);
   });
 });

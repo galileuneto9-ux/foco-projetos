@@ -50,30 +50,15 @@ export async function commitTouch(formData: FormData) {
     .select("id")
     .maybeSingle();
   if (!claimed) redirect(`/toque?t=${encodeURIComponent(token)}`);
-  if (payload.action === "concluir" && payload.stepId) {
-    const { data: step } = await admin.from("project_steps").select("id, title, project_id, team_id, status").eq("id", payload.stepId).maybeSingle();
-    const { data: project } = step
-      ? await admin.from("projects").select("owner_id").eq("id", step.project_id).maybeSingle()
-      : { data: null };
-    if (step && project?.owner_id === payload.userId && (step.status === "atual" || step.status === "pendente")) {
-      await admin.from("project_steps").update({ status: "feito", completed_at: new Date().toISOString() }).eq("id", step.id);
-      await admin.from("deliveries").insert({
-        team_id: step.team_id,
-        user_id: payload.userId,
-        project_id: step.project_id,
-        step_id: step.id,
-        title: step.title,
-      });
-      await admin.from("projects").update({ last_progress_at: new Date().toISOString() }).eq("id", step.project_id);
-      const { data: next } = await admin
-        .from("project_steps")
-        .select("id")
-        .eq("project_id", step.project_id)
-        .eq("status", "pendente")
-        .order("position")
-        .limit(1)
-        .maybeSingle();
-      if (next) await admin.from("project_steps").update({ status: "atual" }).eq("id", next.id);
+  if (payload.action === "concluir" && payload.stepId && /^[0-9a-f-]{36}$/i.test(payload.stepId)) {
+    const { data: matches } = await admin
+      .from("tasks")
+      .select("id, status")
+      .or(`id.eq.${payload.stepId},legacy_step_id.eq.${payload.stepId}`)
+      .limit(1);
+    const task = matches?.[0];
+    if (task && (task.status === "aberta" || task.status === "em_andamento")) {
+      await admin.rpc("complete_task", { p_task: task.id, p_actor: payload.userId });
     }
   }
   if (payload.action === "fiz" || payload.action === "nao_fiz" || payload.action === "travado") {

@@ -1,10 +1,13 @@
-import { BottomNav } from "@/components/bottom-nav";
+import { AppShell } from "@/components/app-shell";
 import { CreateTeamForm } from "@/components/auth-forms";
+import { TeamColumn } from "@/components/team-column";
+import { todayInSaoPaulo } from "@/domain/time";
 import { teamFormDefaults } from "@/server/auth-messages";
 import { requireMember } from "@/server/session";
+import { loadTeamColumn } from "@/server/team-snapshot";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { user, member, team } = await requireMember();
+  const { user, supabase, member, team } = await requireMember();
   if (!member || !team) {
     return (
       <main className="mx-auto max-w-lg px-4 py-8">
@@ -16,14 +19,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </main>
     );
   }
+  const board = await loadTeamColumn(supabase, member.team_id, todayInSaoPaulo());
   return (
-    <div className="mx-auto min-h-dvh max-w-lg">
-      <header className="flex items-baseline justify-between px-4 pt-5">
-        <p className="font-serif text-2xl text-primary">Foco</p>
-        <p className="text-sm text-muted-foreground">{team.name}</p>
-      </header>
-      <main className="px-4 pb-28 pt-4">{children}</main>
-      <BottomNav />
-    </div>
+    <AppShell name={member.display_name} team={<TeamColumn people={board.people} ranked={board.ranked} />}>
+      {children}
+    </AppShell>
   );
 }

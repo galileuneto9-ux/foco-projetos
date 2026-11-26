@@ -1,45 +1,55 @@
 import Link from "next/link";
-import { isStalled } from "@/domain/rules";
 import { progressCopy, showEveningCheck } from "@/domain/focus";
-import { formatTodayLabel, todayInSaoPaulo } from "@/domain/time";
+import { focusProjectId, nextOpenTask, panelCounts, type TaskNode } from "@/domain/redesign";
+import { todayInSaoPaulo } from "@/domain/time";
 import { DailyCheck, TodayActions } from "@/components/today-actions";
-import { FocusTimer } from "@/components/focus-timer";
+import { PriorityTag } from "@/components/priority-tag";
 import { ProgressBlock } from "@/components/progress-bar";
-import { StuckFlow } from "@/components/stuck-flow";
-import { QuickIdeaForm } from "@/components/project-forms";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { requireMember } from "@/server/session";
 
-type StepRow = {
+type TaskRow = {
   id: string;
-  project_id: string;
+  project_id: string | null;
+  parent_task_id: string | null;
   title: string;
-  done_when: string;
-  minutes: number;
+  done_when: string | null;
   status: string;
+  position: number;
+  due_date: string | null;
+  owner_id: string;
+  assignee_id: string;
+  projects: { owner_id: string; priority: string; due_date: string | null; title: string; status: string; position: number; next_milestone_on: string | null } | null;
 };
 
-export default async function TodayPage() {
-  const { supabase, user, member } = await requireMember();
+export default async function PainelPage() {
+  const { supabase, user, member, team } = await requireMember();
   if (!member) return null;
   const today = todayInSaoPaulo();
-  const now = new Date();
+  const { data: taskRows } = await supabase
+    .from("tasks")
+    .select("id, project_id, parent_task_id, title, done_when, status, position, due_date, owner_id, assignee_id, projects(owner_id, priority, due_date, title, status, position, next_milestone_on)");
+  const tasks = ((taskRows ?? []) as unknown as TaskRow[]).filter(isMine(user.id));
+  const counts = panelCounts(
+    tasks.map((task) => ({ status: task.status, due: task.due_date })),
+    today,
+  );
   const { data: projects } = await supabase
     .from("projects")
-    .select("id, title, status, board_flag, next_milestone_on, last_progress_at, activated_at")
+    .select("id, title, status, priority, due_date, position, next_milestone_on, owner_id")
     .eq("owner_id", user.id)
-    .eq("status", "ativo")
-    .order("position")
-    .limit(3);
-  const ids = (projects ?? []).map((project) => project.id);
-  const { data: steps } = ids.length
-    ? await supabase
-        .from("project_steps")
-        .select("id, project_id, title, done_when, minutes, status, position")
-        .in("project_id", ids)
-        .order("position")
-    : { data: [] as StepRow[] };
+    .in("status", ["ativo", "fila"])
+    .order("position");
+  const active = (projects ?? []).filter((project) => project.status === "ativo");
+  const queue = (projects ?? []).filter((project) => project.status === "fila").slice(0, 3);
+  const focusId = focusProjectId(
+    (projects ?? []).map((project) => ({ id: project.id, position: project.position, status: project.status })),
+    tasks.map((task) => ({ projectId: task.project_id, status: task.status })),
+  );
+  const focus = active.find((project) => project.id === focusId) ?? null;
+  const focusTasks = tasks.filter((task) => task.project_id === focus?.id);
+  const current = nextOpenTask(focusTasks.map(toNode));
+  const done = focusTasks.filter((task) => task.status === "feita" || task.status === "pulada").length;
   const { data: evening } = await supabase
     .from("checkins")
     .select("status")
@@ -47,113 +57,101 @@ export default async function TodayPage() {
     .eq("kind", "diario_noite")
     .eq("for_date", today)
     .maybeSingle();
-  const byProject = new Map<string, StepRow[]>();
-  for (const step of (steps ?? []) as StepRow[]) {
-    const list = byProject.get(step.project_id) ?? [];
-    list.push(step);
-    byProject.set(step.project_id, list);
-  }
-  const pendingCheck = (projects ?? []).length > 0 && evening?.status !== "respondido" && showEveningCheck(now);
-  const stalled = (projects ?? []).some((project) =>
-    isStalled({
-      status: project.status,
-      lastProgressAt: project.last_progress_at,
-      activatedAt: project.activated_at,
-      now,
-      stallDays: 5,
-    }),
-  );
-  const [hero, ...rest] = projects ?? [];
-
-  function stats(projectId: string) {
-    const list = byProject.get(projectId) ?? [];
-    const done = list.filter((step) => step.status === "feito" || step.status === "pulado").length;
-    const current = list.find((step) => step.status === "atual") ?? null;
-    return { list, done, current, total: list.length };
-  }
+  const pendingCheck = active.length > 0 && evening?.status !== "respondido" && showEveningCheck(new Date());
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-6">
       <div>
-        <h1 className="font-serif text-3xl">Hoje</h1>
-        <p className="text-sm text-muted-foreground">{formatTodayLabel()}</p>
+        <h1 className="font-serif text-4xl">Painel</h1>
+        <p className="text-sm text-suave">{team?.name}</p>
       </div>
-      {!hero ? (
-        <Card>
-          <p>Nenhum projeto ativo. A fila guarda o que ainda não é a vez.</p>
-          <Link href="/app/fila" className="mt-3 inline-block text-sm underline">
-            Ver a fila
-          </Link>
-        </Card>
-      ) : (
-        <Hero project={hero} {...stats(hero.id)} />
-      )}
-      {rest.map((project) => {
-        const view = stats(project.id);
-        const progress = progressCopy({ done: view.done, total: view.total, milestoneOn: project.next_milestone_on });
-        return (
-          <Card key={project.id} className="grid gap-2 py-3">
-            <div className="flex items-center justify-between gap-3">
-              <p className="font-medium">{project.title}</p>
-              <div className="w-24">
-                <ProgressBlock done={view.done} total={view.total} milestoneOn={project.next_milestone_on} compact />
-              </div>
-            </div>
-            {view.current ? (
-              <p className="text-sm text-muted-foreground">{view.current.title}</p>
-            ) : progress.delivered ? (
-              <p className="text-sm font-semibold text-primary">Entregue</p>
-            ) : (
-              <Button asChild variant="outline">
-                <Link href={`/app/projetos/${project.id}`}>Quebrar em passos</Link>
-              </Button>
-            )}
-          </Card>
-        );
-      })}
-      {stalled ? <p className="text-sm text-muted-foreground">Sem movimento há 5 dias.</p> : null}
       {pendingCheck ? <DailyCheck pending /> : null}
-      <QuickIdeaForm />
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Counter href="/app/tarefas?filtro=iniciadas" label="Iniciadas" value={counts.iniciadas} className="text-oliva" />
+        <Counter href="/app/tarefas?filtro=a_vencer" label="A vencer" value={counts.aVencer} className="text-ocre" />
+        <Counter href="/app/tarefas?filtro=vencidas" label="Vencidas" value={counts.vencidas} className="text-argila" />
+      </div>
+      <Card className="grid gap-3">
+        {!focus || !current ? (
+          <>
+            <p>Nenhum passo de projeto ativo</p>
+            <div className="flex gap-4 text-sm">
+              <Link href="/app/fila" className="underline">
+                Fila
+              </Link>
+              <Link href="/app/tarefas" className="underline">
+                Tarefas
+              </Link>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-suave">{focus.title}</p>
+            <h2 className="font-serif text-3xl leading-tight">{current.title}</h2>
+            {currentDoneWhen(focusTasks, current.id) ? (
+              <p className="text-sm">
+                <span className="text-suave">Pronto quando: </span>
+                {currentDoneWhen(focusTasks, current.id)}
+              </p>
+            ) : null}
+            <TodayActions stepId={current.id} projectId={focus.id} />
+            <ProgressBlock done={done} total={focusTasks.length} milestoneOn={focus.next_milestone_on} />
+          </>
+        )}
+      </Card>
+      <div className="grid gap-3">
+        {[...active, ...queue].map((project) => {
+          const list = tasks.filter((task) => task.project_id === project.id);
+          const finished = list.filter((task) => task.status === "feita" || task.status === "pulada").length;
+          const progress = progressCopy({ done: finished, total: list.length, milestoneOn: project.next_milestone_on });
+          const priority = project.priority === "importante" || project.priority === "baixo" ? project.priority : "medio";
+          return (
+            <Link key={project.id} href={`/app/projetos/${project.id}`} className="rounded-2xl border border-borda bg-creme p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="font-medium">{project.title}</p>
+                <PriorityTag priority={priority} />
+              </div>
+              <p className="mt-1 text-sm text-suave">{project.due_date ? formatDue(project.due_date) : "sem prazo"}</p>
+              <div className="mt-3">
+                <ProgressBlock done={finished} total={list.length} milestoneOn={project.next_milestone_on} compact />
+                {progress.delivered ? <p className="text-sm font-semibold text-oliva">Entregue</p> : null}
+              </div>
+            </Link>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-function Hero({
-  project,
-  current,
-  done,
-  total,
-}: {
-  project: { id: string; title: string; next_milestone_on: string | null };
-  current: StepRow | null;
-  done: number;
-  total: number;
-}) {
-  const progress = progressCopy({ done, total, milestoneOn: project.next_milestone_on });
+function Counter({ href, label, value, className }: { href: string; label: string; value: number; className: string }) {
   return (
-    <Card className="grid gap-4">
-      <ProgressBlock done={done} total={total} milestoneOn={project.next_milestone_on} />
-      {progress.delivered ? (
-        <h2 className="font-serif text-4xl text-primary">Entregue</h2>
-      ) : current ? (
-        <>
-          <h2 className="font-serif text-4xl leading-tight">{current.title}</h2>
-          <p className="text-sm">
-            <span className="text-muted-foreground">Pronto quando: </span>
-            {current.done_when}
-          </p>
-          <FocusTimer />
-          <TodayActions stepId={current.id} projectId={project.id} />
-          <StuckFlow projectId={project.id} />
-        </>
-      ) : (
-        <>
-          <h2 className="font-serif text-3xl">{project.title}</h2>
-          <Button asChild>
-            <Link href={`/app/projetos/${project.id}`}>Quebrar em passos</Link>
-          </Button>
-        </>
-      )}
-    </Card>
+    <Link href={href} className="rounded-2xl border border-borda bg-creme p-4">
+      <p className="text-sm text-suave">{label}</p>
+      <p className={`font-serif text-5xl ${className}`}>{value}</p>
+    </Link>
   );
+}
+
+function isMine(userId: string) {
+  return (task: TaskRow) => task.owner_id === userId || task.assignee_id === userId || task.projects?.owner_id === userId;
+}
+
+function toNode(task: TaskRow): TaskNode {
+  return {
+    id: task.id,
+    parentId: task.parent_task_id,
+    position: task.position,
+    status: task.status as TaskNode["status"],
+    title: task.title,
+  };
+}
+
+function currentDoneWhen(tasks: TaskRow[], id: string) {
+  return tasks.find((task) => task.id === id)?.done_when ?? "";
+}
+
+function formatDue(iso: string) {
+  const [, month, day] = iso.split("-");
+  return `${day}/${month}`;
 }

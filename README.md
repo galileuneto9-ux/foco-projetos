@@ -53,6 +53,9 @@ Arquivos, nesta ordem:
 
 - `supabase/migrations/20261126120000_schema.sql`
 - `supabase/migrations/20261126120100_rls.sql`
+- `supabase/migrations/20261126180000_foco_ux.sql`
+- `supabase/migrations/20261126193000_limpa_prefixos_passos.sql`
+- `supabase/migrations/20261126200000_tarefas_e_placar.sql`
 
 Não há seed de produção. `supabase/seed.sql` está vazio de propósito.
 
@@ -131,7 +134,7 @@ sudo -u postgres psql -c "create database foco_rls owner foco_test"
 DATABASE_URL=postgresql://foco_test:uma-senha-local@127.0.0.1:5432/foco_rls npm run test:rls
 ```
 
-O teste recria o schema, aplica o prelude e as migrations, e prova: dois times isolados; membro não lê projeto, passo, nota nem check diário de outra pessoa; o compartilhado aparece no quadro sem passo nem nota; voltar para privado some; quem criou o time lê o check semanal e o resumo, e não lê o privado do colega; anon não acessa; o 4º ativo é recusado.
+O teste recria o schema, aplica o prelude e as migrations, e prova: dois times isolados; membro não lê projeto privado, nota nem check diário de outra pessoa; a tarefa de um projeto compartilhado fica visível e a nota continua só de quem escreveu; voltar para privado some; quem criou o time lê o check semanal e o resumo, e não lê o privado do colega; anon não acessa; o 4º projeto ativo é recusado; tarefa avulsa não entra nesse teto; pontos não são apagados nem duplicados e o placar do colega não inclui o privado.
 
 ```bash
 npm run scan-secrets

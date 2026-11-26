@@ -35,6 +35,12 @@ export const projectSchema = z.object({
   title: z.string().trim().min(2, "O título precisa de pelo menos 2 caracteres.").max(120),
   brief: z.string().trim().max(2000, "A ideia passa de 2000 caracteres.").default(""),
   visibility: z.enum(["privado", "compartilhado"]),
+  priority: z.enum(["importante", "medio", "baixo"]).default("medio"),
+  dueDate: z
+    .string()
+    .trim()
+    .refine((value) => value === "" || /^\d{4}-\d{2}-\d{2}$/.test(value), "Data inválida.")
+    .default(""),
   nextMilestone: z.string().trim().max(200, "O marco passa de 200 caracteres.").default(""),
   nextMilestoneOn: z
     .string()
