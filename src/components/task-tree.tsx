@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { visualOrder, type TaskNode } from "@/domain/redesign";
+import { visualOrder, type Priority, type TaskNode, type TaskVisibility } from "@/domain/redesign";
+import { Field } from "@/components/field";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   createLooseTask,
   createProjectTask,
@@ -13,6 +16,7 @@ import {
   outdentTaskAction,
   renameTask,
   toggleTask,
+  updateLooseTask,
 } from "@/server/actions/tasks";
 
 export function TaskTree({
@@ -100,7 +104,8 @@ export function TaskTree({
     <div className="grid gap-2">
       <ol className="grid">
         {ordered.map((task) => (
-          <li key={task.id} className="flex min-h-11 items-center gap-2" style={{ paddingLeft: task.parentId ? 24 : 0 }}>
+          <li key={task.id} className="grid gap-2 py-1" style={{ paddingLeft: task.parentId ? 24 : 0 }}>
+            <div className="flex min-h-11 items-center gap-2">
             <input
               type="checkbox"
               className="h-5 w-5"
@@ -128,15 +133,27 @@ export function TaskTree({
               }}
               onKeyDown={(event) => onKey(event, task)}
             />
+            </div>
+            {task.visibility === "privado" || task.visibility === "compartilhado" ? (
+              <LooseSettings
+                task={task}
+                disabled={!canEdit || !task.canTune}
+                onError={setMessage}
+                onSaved={(priority, visibility) => {
+                  setItems((current) => current.map((item) => (item.id === task.id ? { ...item, priority, visibility } : item)));
+                  router.refresh();
+                }}
+              />
+            ) : null}
           </li>
         ))}
       </ol>
-      {canEdit ? (
+      {canEdit && projectId ? (
         <button
           type="button"
           className="min-h-11 text-left text-sm text-suave"
           onClick={async () => {
-            const result = projectId ? await createProjectTask(projectId) : await createLooseTask("Nova tarefa");
+            const result = await createProjectTask(projectId);
             if (!result.ok) {
               setMessage(result.message);
               return;
@@ -146,14 +163,13 @@ export function TaskTree({
               {
                 id: result.id,
                 parentId: null,
-                position: "position" in result ? result.position : current.length,
+                position: result.position,
                 status: "aberta",
                 title: "Nova tarefa",
               },
             ]);
             setFocusId(result.id);
-            if (projectId) router.refresh();
-            else router.push("/app/tarefas");
+            router.refresh();
           }}
         >
           Nova tarefa
@@ -181,6 +197,153 @@ export function TaskCheck({ id, done, disabled }: { id: string; done: boolean; d
   );
 }
 
+const selectClass = "min-h-11 rounded-xl border border-border bg-card px-3";
+
+export function LooseTaskForm() {
+  const router = useRouter();
+  const [title, setTitle] = useState("");
+  const [priority, setPriority] = useState<Priority>("medio");
+  const [visibility, setVisibility] = useState<TaskVisibility>("privado");
+  const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
+  const [pending, setPending] = useState(false);
+  return (
+    <form
+      className="mb-4 grid gap-3"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        setPending(true);
+        const result = await createLooseTask({ title, priority, visibility });
+        setPending(false);
+        if (!result.ok) {
+          setMessage({ text: result.message, ok: false });
+          return;
+        }
+        setTitle("");
+        setPriority("medio");
+        setVisibility("privado");
+        setMessage({ text: "Tarefa criada.", ok: true });
+        router.refresh();
+      }}
+    >
+      <Field label="Nova tarefa" htmlFor="loose-title">
+        <Input id="loose-title" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="O que você quer terminar?" />
+      </Field>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Prioridade" htmlFor="loose-priority">
+          <PrioritySelect id="loose-priority" value={priority} onChange={setPriority} />
+        </Field>
+        <Field label="Quem vê" htmlFor="loose-visibility" hint="Compartilhada entra no placar do time. Privada fica só com você.">
+          <VisibilitySelect id="loose-visibility" value={visibility} onChange={setVisibility} />
+        </Field>
+      </div>
+      {message ? <p className={message.ok ? "text-sm text-suave" : "text-sm text-destructive"}>{message.text}</p> : null}
+      <Button type="submit" disabled={pending}>
+        Nova tarefa
+      </Button>
+    </form>
+  );
+}
+
+function LooseSettings({
+  task,
+  disabled,
+  onError,
+  onSaved,
+}: {
+  task: TaskNode;
+  disabled: boolean;
+  onError: (message: string) => void;
+  onSaved: (priority: Priority, visibility: TaskVisibility) => void;
+}) {
+  const priority = task.priority === "importante" || task.priority === "baixo" ? task.priority : "medio";
+  const visibility = task.visibility === "compartilhado" ? "compartilhado" : "privado";
+  return (
+    <div className="flex flex-wrap gap-2">
+      <PrioritySelect
+        id={`priority-${task.id}`}
+        value={priority}
+        disabled={disabled}
+        labelledByTitle={task.title}
+        onChange={async (next) => {
+          const result = await updateLooseTask(task.id, { priority: next, visibility });
+          if (!result.ok) onError(result.message);
+          else onSaved(next, visibility);
+        }}
+      />
+      <VisibilitySelect
+        id={`visibility-${task.id}`}
+        value={visibility}
+        disabled={disabled}
+        labelledByTitle={task.title}
+        onChange={async (next) => {
+          const result = await updateLooseTask(task.id, { priority, visibility: next });
+          if (!result.ok) onError(result.message);
+          else onSaved(priority, next);
+        }}
+      />
+    </div>
+  );
+}
+
+function PrioritySelect({
+  id,
+  value,
+  onChange,
+  disabled,
+  labelledByTitle,
+}: {
+  id: string;
+  value: Priority;
+  onChange: (value: Priority) => void;
+  disabled?: boolean;
+  labelledByTitle?: string;
+}) {
+  return (
+    <select
+      id={id}
+      className={selectClass}
+      value={value}
+      disabled={disabled}
+      aria-label={labelledByTitle ? `Prioridade de ${labelledByTitle}` : "Prioridade"}
+      onChange={(event) => onChange(event.target.value as Priority)}
+    >
+      <option value="importante">Importante</option>
+      <option value="medio">Médio</option>
+      <option value="baixo">Baixo</option>
+    </select>
+  );
+}
+
+function VisibilitySelect({
+  id,
+  value,
+  onChange,
+  disabled,
+  labelledByTitle,
+}: {
+  id: string;
+  value: TaskVisibility;
+  onChange: (value: TaskVisibility) => void;
+  disabled?: boolean;
+  labelledByTitle?: string;
+}) {
+  return (
+    <select
+      id={id}
+      className={selectClass}
+      value={value}
+      disabled={disabled}
+      aria-label={labelledByTitle ? `Visibilidade de ${labelledByTitle}` : "Quem vê"}
+      onChange={(event) => onChange(event.target.value as TaskVisibility)}
+    >
+      <option value="privado">Privada</option>
+      <option value="compartilhado">Compartilhada com o time</option>
+    </select>
+  );
+}
+
 function signature(tasks: TaskNode[]) {
-  return tasks.map((task) => `${task.id}:${task.parentId}:${task.position}:${task.status}:${task.title}`).join("|");
+  return tasks
+    .map((task) => `${task.id}:${task.parentId}:${task.position}:${task.status}:${task.title}:${task.priority ?? ""}:${task.visibility ?? ""}:${task.canTune ? 1 : 0}`)
+    .join("|");
 }

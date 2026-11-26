@@ -54,6 +54,17 @@ export const projectSchema = z.object({
     .default(""),
 });
 
+export const looseTaskSchema = z.object({
+  title: z.string().trim().min(1, "Dê um nome à tarefa.").max(160),
+  priority: z.enum(["importante", "medio", "baixo"]).default("medio"),
+  visibility: z.enum(["privado", "compartilhado"]).default("privado"),
+});
+
+export const looseTaskSettingsSchema = z.object({
+  priority: z.enum(["importante", "medio", "baixo"]),
+  visibility: z.enum(["privado", "compartilhado"]),
+});
+
 export const manualStepSchema = z.object({
   title: z.string().trim().min(1, "Dê um nome ao passo.").max(160),
   doneWhen: z.string().trim().min(1, "Descreva quando está pronto.").max(400),

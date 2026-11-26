@@ -1,5 +1,19 @@
 export type TaskStatus = "aberta" | "em_andamento" | "feita" | "pulada";
 export type Priority = "importante" | "medio" | "baixo";
+export type TaskVisibility = "privado" | "compartilhado";
+
+export const PRIVATE_TASK_ASSIGNEE_MESSAGE = "Uma tarefa privada não pode ficar com outra pessoa.";
+
+export function looseTaskAssignment(input: {
+  visibility: TaskVisibility;
+  ownerId: string;
+  assigneeId: string;
+}): { ok: true } | { ok: false; message: string } {
+  if (input.visibility === "privado" && input.assigneeId !== input.ownerId) {
+    return { ok: false, message: PRIVATE_TASK_ASSIGNEE_MESSAGE };
+  }
+  return { ok: true };
+}
 
 export type TaskNode = {
   id: string;
@@ -7,6 +21,9 @@ export type TaskNode = {
   position: number;
   status: TaskStatus;
   title: string;
+  priority?: Priority | null;
+  visibility?: TaskVisibility | null;
+  canTune?: boolean;
 };
 
 export function addDays(isoDate: string, days: number): string {

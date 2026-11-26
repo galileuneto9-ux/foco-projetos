@@ -1,8 +1,11 @@
 import { describe, expect, test } from "vitest";
+import { looseTaskSchema } from "@/domain/schemas";
 import {
+  PRIVATE_TASK_ASSIGNEE_MESSAGE,
   addDays,
   focusProjectId,
   indentTask,
+  looseTaskAssignment,
   memberStatusLine,
   nextOpenTask,
   outdentTask,
@@ -87,6 +90,35 @@ describe("pontos e painel", () => {
       ),
     ).toBe("2 em andamento");
     expect(memberStatusLine([{ status: "feita", due: "2026-11-01" }], "2026-11-26")).toBe("Disponível");
+  });
+});
+
+describe("tarefa avulsa", () => {
+  test("o padrão é médio e privada, e a escolha de importante compartilhada fica", () => {
+    expect(looseTaskSchema.parse({ title: "Anotar o combinado" })).toMatchObject({
+      priority: "medio",
+      visibility: "privado",
+    });
+    const chosen = looseTaskSchema.parse({
+      title: "Enviar o contrato",
+      priority: "importante",
+      visibility: "compartilhado",
+    });
+    expect(chosen.priority).toBe("importante");
+    expect(chosen.visibility).toBe("compartilhado");
+    expect(pointsFor("avulsa", chosen.priority)).toBe(30);
+    expect(
+      sharedPoints([{ userId: "ana", points: 30, visibility: chosen.visibility, weekStart: "2026-11-23" }], "2026-11-23").get("ana"),
+    ).toBe(30);
+  });
+
+  test("privada não pode ficar com outra pessoa; compartilhada pode", () => {
+    expect(looseTaskAssignment({ visibility: "privado", ownerId: "ana", assigneeId: "bia" })).toEqual({
+      ok: false,
+      message: PRIVATE_TASK_ASSIGNEE_MESSAGE,
+    });
+    expect(looseTaskAssignment({ visibility: "privado", ownerId: "ana", assigneeId: "ana" }).ok).toBe(true);
+    expect(looseTaskAssignment({ visibility: "compartilhado", ownerId: "ana", assigneeId: "bia" }).ok).toBe(true);
   });
 });
 

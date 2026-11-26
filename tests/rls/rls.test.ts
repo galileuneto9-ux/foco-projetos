@@ -621,3 +621,31 @@ test("pular não pontua, a semana começa na segunda em São Paulo e avulsa não
     expect(active.rowCount).toBe(2);
   });
 });
+
+test("avulsa compartilhada importante entra no placar e a privada não vai para outra pessoa", async () => {
+  await withRole(ownerA, "authenticated", async (client) => {
+    const shared = await client.query(
+      `insert into public.tasks (team_id, owner_id, assignee_id, title, priority, visibility, position)
+       values ($1, $2, $2, 'Contrato', 'importante', 'compartilhado', 20) returning id`,
+      [ids.teamA, ownerA],
+    );
+    await client.query(
+      `insert into public.tasks (team_id, owner_id, assignee_id, title, priority, visibility, position)
+       values ($1, $2, $2, 'Segredo', 'baixo', 'privado', 21)`,
+      [ids.teamA, ownerA],
+    );
+    await client.query("select public.complete_task($1)", [shared.rows[0].id]);
+    const score = await client.query("select points, visibility from public.point_events where source_id = $1", [shared.rows[0].id]);
+    expect(score.rows[0]).toEqual({ points: 30, visibility: "compartilhado" });
+    await client.query("update public.tasks set assignee_id = $1 where id = $2", [memberA, shared.rows[0].id]);
+    const blocked = await tryQuery(client, "update public.tasks set visibility = 'privado' where id = $1", [shared.rows[0].id]);
+    expect(blocked.ok).toBe(false);
+    if (!blocked.ok) expect(blocked.message).toMatch(/ATRIBUICAO_PRIVADA/);
+    await setClaims(client, memberA, "authenticated");
+    await client.query("set local role authenticated");
+    const seen = await client.query("select title from public.tasks where project_id is null order by title");
+    expect(seen.rows.map((row) => row.title)).toEqual(["Contrato"]);
+    const points = await client.query("select points from public.point_events where source_id = $1", [shared.rows[0].id]);
+    expect(points.rows[0]?.points).toBe(30);
+  });
+});

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { addDays } from "@/domain/redesign";
 import type { TaskNode } from "@/domain/redesign";
 import { todayInSaoPaulo } from "@/domain/time";
-import { TaskCheck, TaskTree } from "@/components/task-tree";
+import { LooseTaskForm, TaskCheck, TaskTree } from "@/components/task-tree";
 import { requireMember } from "@/server/session";
 
 type TaskRow = {
@@ -15,6 +15,8 @@ type TaskRow = {
   position: number;
   owner_id: string;
   assignee_id: string;
+  priority: "importante" | "medio" | "baixo" | null;
+  visibility: "privado" | "compartilhado" | null;
   projects: { id: string; title: string; owner_id: string } | null;
 };
 
@@ -35,7 +37,7 @@ export default async function TarefasPage({ searchParams }: { searchParams: Prom
   const today = todayInSaoPaulo();
   const { data } = await supabase
     .from("tasks")
-    .select("id, title, status, due_date, project_id, parent_task_id, position, owner_id, assignee_id, projects(id, title, owner_id)")
+    .select("id, title, status, due_date, project_id, parent_task_id, position, owner_id, assignee_id, priority, visibility, projects(id, title, owner_id)")
     .order("position");
   const mine = ((data ?? []) as unknown as TaskRow[]).filter(
     (task) => task.owner_id === user.id || task.assignee_id === user.id || task.projects?.owner_id === user.id,
@@ -50,6 +52,9 @@ export default async function TarefasPage({ searchParams }: { searchParams: Prom
         position: task.position,
         status: task.status as TaskNode["status"],
         title: task.title,
+        priority: task.priority === "importante" || task.priority === "baixo" ? task.priority : "medio",
+        visibility: task.visibility === "compartilhado" ? "compartilhado" : "privado",
+        canTune: task.owner_id === user.id,
       }),
     );
   const projectTasks = visible.filter((task) => task.project_id);
@@ -77,6 +82,7 @@ export default async function TarefasPage({ searchParams }: { searchParams: Prom
       <section className="rounded-2xl border border-borda bg-creme p-4">
         <h2 className="font-serif text-2xl">Avulsas</h2>
         <p className="mb-3 text-sm text-suave">Não entram na fila nem no teto de 3 projetos.</p>
+        <LooseTaskForm />
         <TaskTree tasks={loose} projectId={null} canEdit />
       </section>
       <section className="grid gap-2">
