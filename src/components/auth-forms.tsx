@@ -96,9 +96,9 @@ export function ResetForm() {
   );
 }
 
-export function CreateTeamForm({ defaultName }: { defaultName: string }) {
+export function CreateTeamForm({ displayName, teamName }: { displayName: string; teamName: string }) {
   const [message, setMessage] = useState<string | null>(null);
-  const form = useForm({ defaultValues: { displayName: defaultName, teamName: defaultName } });
+  const form = useForm({ defaultValues: { displayName, teamName } });
   return (
     <form
       className="grid gap-4"

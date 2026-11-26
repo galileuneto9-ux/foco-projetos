@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { teamFromMetadata } from "@/server/auth-messages";
 import { createClient } from "@/lib/supabase/server";
 
 export async function requireUser() {
@@ -12,10 +13,9 @@ export async function requireMember() {
   const { supabase, user } = await requireUser();
   let { data: member } = await supabase.from("team_members").select("*").eq("user_id", user.id).maybeSingle();
   if (!member) {
-    const teamName = String(user.user_metadata?.team_name ?? "").trim();
-    const displayName = String(user.user_metadata?.display_name ?? teamName).trim();
-    if (teamName.length >= 2 && displayName.length >= 2) {
-      await supabase.rpc("create_team", { p_name: teamName, p_display_name: displayName });
+    const fromMetadata = teamFromMetadata(user.user_metadata);
+    if (fromMetadata) {
+      await supabase.rpc("create_team", { p_name: fromMetadata.teamName, p_display_name: fromMetadata.displayName });
       member = (await supabase.from("team_members").select("*").eq("user_id", user.id).maybeSingle()).data;
     }
   }

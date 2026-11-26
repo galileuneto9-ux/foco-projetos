@@ -1,0 +1,66 @@
+import { describe, expect, it } from "vitest";
+import { GET } from "@/app/auth/callback/route";
+import { signupErrorMessage, teamFormDefaults, teamFromMetadata } from "@/server/auth-messages";
+import { safeNextPath } from "@/server/safe-next";
+import { securityHeaders } from "@/server/security-headers";
+import nextConfig from "../../next.config";
+
+const ORIGIN = "https://foco.example";
+
+describe("redirect depois do login", () => {
+  it("só aceita caminho relativo interno", () => {
+    expect(safeNextPath("/app", ORIGIN)).toBe("/app");
+    expect(safeNextPath("/login?ok=1", ORIGIN)).toBe("/login?ok=1");
+    expect(safeNextPath("https://evil.example", ORIGIN)).toBe("/app");
+    expect(safeNextPath("//evil.example", ORIGIN)).toBe("/app");
+    expect(safeNextPath("/\\evil.example", ORIGIN)).toBe("/app");
+    expect(safeNextPath("\\\\evil.example", ORIGIN)).toBe("/app");
+    expect(safeNextPath(null, ORIGIN)).toBe("/app");
+  });
+
+  it("a rota de callback não segue next externo", async () => {
+    const cases = ["https://evil.example", "//evil.example", "/\\evil.example"];
+    for (const next of cases) {
+      const response = await GET(new Request(`${ORIGIN}/auth/callback?next=${encodeURIComponent(next)}`));
+      expect(response.headers.get("location")).toBe(`${ORIGIN}/app`);
+    }
+    const ok = await GET(new Request(`${ORIGIN}/auth/callback?next=${encodeURIComponent("/login")}`));
+    expect(ok.headers.get("location")).toBe(`${ORIGIN}/login`);
+  });
+});
+
+describe("cadastro", () => {
+  it("explica o limite de envio de e-mail", () => {
+    expect(signupErrorMessage({ code: "over_email_send_rate_limit", message: "rate limit" })).toMatch(/Limite de envio/);
+    expect(signupErrorMessage({ code: "over_email_send_rate_limit", message: "rate limit" })).toMatch(/mais tarde/);
+    expect(signupErrorMessage({ message: "over_email_send_rate_limit" })).toMatch(/Limite de envio/);
+    expect(signupErrorMessage({ code: "user_already_exists", message: "já existe" })).toMatch(/Tente outro e-mail/);
+  });
+
+  it("separa o nome da pessoa e o nome do time gravados no cadastro", () => {
+    expect(teamFormDefaults({ display_name: "Ana", team_name: "Atendimento" })).toEqual({
+      displayName: "Ana",
+      teamName: "Atendimento",
+    });
+    expect(teamFromMetadata({ display_name: "Ana", team_name: "Atendimento" })).toEqual({
+      displayName: "Ana",
+      teamName: "Atendimento",
+    });
+    expect(teamFromMetadata({ display_name: "Ana" })).toBeNull();
+  });
+});
+
+describe("headers de segurança", () => {
+  it("publica CSP, nosniff e referrer pelo next.config", async () => {
+    const headers = securityHeaders();
+    const csp = headers.find((header) => header.key === "Content-Security-Policy")?.value ?? "";
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("https://*.supabase.co");
+    expect(csp).toContain("wss://*.supabase.co");
+    expect(headers).toContainEqual({ key: "X-Content-Type-Options", value: "nosniff" });
+    expect(headers).toContainEqual({ key: "Referrer-Policy", value: "strict-origin-when-cross-origin" });
+    const fromConfig = await nextConfig.headers?.();
+    expect(fromConfig?.[0]?.headers).toEqual(headers);
+    expect(fromConfig?.[0]?.source).toBe("/:path*");
+  });
+});

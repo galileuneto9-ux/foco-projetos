@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { acceptInviteSchema, loginSchema, signupSchema } from "@/domain/schemas";
+import { signupErrorMessage } from "@/server/auth-messages";
 import { createClient } from "@/lib/supabase/server";
 import { dbError } from "@/server/errors";
 
@@ -21,7 +22,7 @@ export async function signUp(input: unknown) {
       data: { team_name: parsed.data.teamName, display_name: parsed.data.displayName },
     },
   });
-  if (error) return { ok: false as const, message: "Não foi possível criar a conta. Tente outro e-mail." };
+  if (error) return { ok: false as const, message: signupErrorMessage(error) };
   if (data.session) {
     const created = await supabase.rpc("create_team", {
       p_name: parsed.data.teamName,

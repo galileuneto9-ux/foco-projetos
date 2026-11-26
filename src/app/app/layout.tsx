@@ -1,5 +1,6 @@
 import { BottomNav } from "@/components/bottom-nav";
 import { CreateTeamForm } from "@/components/auth-forms";
+import { teamFormDefaults } from "@/server/auth-messages";
 import { requireMember } from "@/server/session";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -10,7 +11,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <h1 className="font-serif text-3xl">Criar o time</h1>
         <p className="mt-2 text-sm text-muted-foreground">Sua conta ainda não está em um time.</p>
         <div className="mt-6">
-          <CreateTeamForm defaultName={String(user.user_metadata?.display_name ?? "")} />
+          <CreateTeamForm {...teamFormDefaults(user.user_metadata)} />
         </div>
       </main>
     );
