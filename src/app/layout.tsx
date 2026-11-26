@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Figtree, Fraunces } from "next/font/google";
+import { RecoveryListener } from "@/components/recovery-listener";
 import "./globals.css";
 
 const sans = Figtree({ subsets: ["latin"], variable: "--font-sans" });
@@ -14,7 +15,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR" className={`${sans.variable} ${serif.variable} h-full`}>
-      <body className="min-h-full antialiased">{children}</body>
+      <body className="min-h-full antialiased">
+        <RecoveryListener />
+        {children}
+      </body>
     </html>
   );
 }

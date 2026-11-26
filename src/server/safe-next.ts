@@ -1,4 +1,10 @@
 const FALLBACK = "/app";
+export const RECOVERY_PATH = "/nova-senha";
+
+export function callbackNextPath(type: string | null | undefined, next: string | null | undefined, origin: string): string {
+  if (type === "recovery") return RECOVERY_PATH;
+  return safeNextPath(next, origin);
+}
 
 export function safeNextPath(next: string | null | undefined, origin: string, fallback = FALLBACK): string {
   if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) {

@@ -32,6 +32,8 @@ No painel do Supabase, a senha mínima fica em 10 caracteres. O `supabase/config
 
 `/cadastro` responde "Acesso só por convite" e não cria conta. Login, aceite de convite e o convite dentro do app continuam.
 
+Um link de recuperação gerado pela Admin API (`generate_link`, `type=recovery`) deve voltar para `{APP_BASE_URL}/auth/callback?type=recovery`. O callback troca a sessão (`code` ou `token_hash`) e manda para `/nova-senha`, onde a pessoa define a senha. Sem sessão, essa página volta ao login. Isso não reativa o cadastro nem a tela "Esqueci a senha".
+
 A tela "Esqueci a senha" está oculta: o envio depende de SMTP, que ainda não está configurado. A ação também recusa o envio enquanto `PASSWORD_RESET_ENABLED` for `false` em `src/server/access.ts`.
 
 Para reativar a recuperação por e-mail:

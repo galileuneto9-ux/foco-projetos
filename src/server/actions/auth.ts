@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { acceptInviteSchema, loginSchema, signupSchema } from "@/domain/schemas";
+import { acceptInviteSchema, loginSchema, newPasswordSchema, signupSchema } from "@/domain/schemas";
 import { INVITE_ONLY_MESSAGE, OPEN_SIGNUP, PASSWORD_RESET_ENABLED } from "@/server/access";
 import { signupErrorMessage } from "@/server/auth-messages";
 import { createClient } from "@/lib/supabase/server";
@@ -58,6 +58,17 @@ export async function requestPasswordReset(input: unknown) {
   const supabase = await createClient();
   await supabase.auth.resetPasswordForEmail(parsed.data, { redirectTo: `${appUrl()}/auth/callback?next=/login` });
   return { ok: true as const, message: "Se o e-mail existir, enviamos o link para criar uma senha nova." };
+}
+
+export async function updatePassword(input: unknown) {
+  const parsed = newPasswordSchema.safeParse(input);
+  if (!parsed.success) return { ok: false as const, message: parsed.error.issues[0]?.message ?? "Confira a senha." };
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getUser();
+  if (!data.user) redirect("/login");
+  const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
+  if (error) return { ok: false as const, message: "Não foi possível salvar a senha. Peça um novo link." };
+  redirect("/app");
 }
 
 export async function signOut() {

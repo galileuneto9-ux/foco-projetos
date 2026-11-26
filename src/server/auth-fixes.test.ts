@@ -3,7 +3,8 @@ import { GET } from "@/app/auth/callback/route";
 import { requestPasswordReset, signUp } from "@/server/actions/auth";
 import { INVITE_ONLY_MESSAGE, OPEN_SIGNUP, PASSWORD_RESET_ENABLED } from "@/server/access";
 import { signupErrorMessage, teamFormDefaults, teamFromMetadata } from "@/server/auth-messages";
-import { safeNextPath } from "@/server/safe-next";
+import { newPasswordSchema } from "@/domain/schemas";
+import { callbackNextPath, safeNextPath } from "@/server/safe-next";
 import { securityHeaders } from "@/server/security-headers";
 import nextConfig from "../../next.config";
 
@@ -12,6 +13,7 @@ const ORIGIN = "https://foco.example";
 describe("redirect depois do login", () => {
   it("só aceita caminho relativo interno", () => {
     expect(safeNextPath("/app", ORIGIN)).toBe("/app");
+    expect(safeNextPath("/nova-senha", ORIGIN)).toBe("/nova-senha");
     expect(safeNextPath("/login?ok=1", ORIGIN)).toBe("/login?ok=1");
     expect(safeNextPath("https://evil.example", ORIGIN)).toBe("/app");
     expect(safeNextPath("//evil.example", ORIGIN)).toBe("/app");
@@ -28,6 +30,14 @@ describe("redirect depois do login", () => {
     }
     const ok = await GET(new Request(`${ORIGIN}/auth/callback?next=${encodeURIComponent("/login")}`));
     expect(ok.headers.get("location")).toBe(`${ORIGIN}/login`);
+    const recovery = await GET(
+      new Request(`${ORIGIN}/auth/callback?type=recovery&next=${encodeURIComponent("https://evil.example")}`),
+    );
+    expect(recovery.headers.get("location")).toBe(`${ORIGIN}/nova-senha`);
+    const recoveryBypass = await GET(
+      new Request(`${ORIGIN}/auth/callback?type=recovery&next=${encodeURIComponent("//evil.example")}`),
+    );
+    expect(recoveryBypass.headers.get("location")).toBe(`${ORIGIN}/nova-senha`);
   });
 });
 
@@ -66,6 +76,21 @@ describe("cadastro", () => {
       teamName: "Atendimento",
     });
     expect(teamFromMetadata({ display_name: "Ana" })).toBeNull();
+  });
+});
+
+describe("nova senha depois do recovery", () => {
+  it("manda o recovery para /nova-senha e recusa senha curta ou diferente", () => {
+    expect(callbackNextPath("recovery", "https://evil.example", ORIGIN)).toBe("/nova-senha");
+    expect(callbackNextPath("recovery", "//evil.example", ORIGIN)).toBe("/nova-senha");
+    expect(callbackNextPath("recovery", "/\\evil.example", ORIGIN)).toBe("/nova-senha");
+    expect(callbackNextPath(null, "/nova-senha", ORIGIN)).toBe("/nova-senha");
+    expect(callbackNextPath(null, "https://evil.example", ORIGIN)).toBe("/app");
+    expect(newPasswordSchema.safeParse({ password: "curta", confirm: "curta" }).success).toBe(false);
+    expect(newPasswordSchema.safeParse({ password: "uma-senha-boa", confirm: "outra-senha" }).success).toBe(false);
+    expect(newPasswordSchema.safeParse({ password: "uma-senha-boa", confirm: "uma-senha-boa" }).success).toBe(true);
+    expect(OPEN_SIGNUP).toBe(false);
+    expect(PASSWORD_RESET_ENABLED).toBe(false);
   });
 });
 

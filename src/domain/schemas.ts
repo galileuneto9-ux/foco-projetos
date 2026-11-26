@@ -9,6 +9,16 @@ export const passwordSchema = z
 
 export const emailSchema = z.string().trim().email("Informe um e-mail válido.").max(200);
 
+export const newPasswordSchema = z
+  .object({
+    password: passwordSchema,
+    confirm: z.string(),
+  })
+  .refine((value) => value.password === value.confirm, {
+    message: "As senhas não conferem.",
+    path: ["confirm"],
+  });
+
 export const loginSchema = z.object({
   email: emailSchema,
   password: z.string().min(1, "Informe a senha."),

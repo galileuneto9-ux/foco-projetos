@@ -37,7 +37,7 @@ export async function proxy(request: NextRequest) {
   });
 
   const { data } = await supabase.auth.getUser();
-  if (path.startsWith("/app") && !data.user) {
+  if ((path.startsWith("/app") || path === "/nova-senha") && !data.user) {
     const login = new URL("/login", request.url);
     login.searchParams.set("next", path);
     return NextResponse.redirect(login);
