@@ -24,17 +24,20 @@ describe("teto de 3", () => {
 });
 
 describe("passos", () => {
-  it("quebra a ideia em passos de 15 a 30 minutos, de forma determinística", () => {
+  it("quebra a ideia em passos curtos, com o primeiro de 5 a 10 minutos", () => {
     const brief = "Escrever o roteiro do atendimento. Revisar com o time. Publicar a versão curta.";
     const first = breakBriefIntoSteps(brief);
     const second = breakBriefIntoSteps(brief);
     expect(first).toEqual(second);
     expect(first.length).toBeGreaterThanOrEqual(2);
-    for (const step of first) {
+    expect(first[0]?.minutes).toBeGreaterThanOrEqual(5);
+    expect(first[0]?.minutes).toBeLessThanOrEqual(10);
+    expect(first[0]?.title.split(/\s+/).length).toBeLessThanOrEqual(8);
+    expect(first[0]?.title.toLowerCase().startsWith("esclarecer")).toBe(false);
+    expect(first[0]?.doneWhen.includes(first[0].title)).toBe(false);
+    for (const step of first.slice(1)) {
       expect(step.minutes).toBeGreaterThanOrEqual(15);
-      expect(step.minutes).toBeLessThanOrEqual(30);
-      expect(step.doneWhen.length).toBeGreaterThan(0);
-      expect(step.title.length).toBeGreaterThan(0);
+      expect(step.minutes).toBeLessThanOrEqual(25);
     }
   });
 
@@ -47,7 +50,9 @@ describe("passos", () => {
       { title: "Título editado pela pessoa", doneWhen: "Quando o arquivo estiver salvo.", minutes: 25 },
     ]);
     expect(edited[0]?.title).toBe("Título editado pela pessoa");
-    expect(() => normalizeConfirmedSteps([{ title: "Curto", doneWhen: "Pronto.", minutes: 10 }])).toThrow(/15 e 30/);
+    expect(normalizeConfirmedSteps([{ title: "Começar o roteiro", doneWhen: "Há uma linha escrita.", minutes: 8 }])[0]?.minutes).toBe(8);
+    expect(() => normalizeConfirmedSteps([{ title: "Curto", doneWhen: "Pronto.", minutes: 4 }])).toThrow(/5 e 25/);
+    expect(() => normalizeConfirmedSteps([{ title: "Curto", doneWhen: "Pronto.", minutes: 30 }])).toThrow(/5 e 25/);
   });
 
   it("valida o JSON do provedor", () => {

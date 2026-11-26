@@ -1,3 +1,5 @@
+import type { CalendarProvider } from "@/integrations/calendar/types";
+import type { LinkAction } from "@/server/action-links";
 import type { CheckinAnswer, CheckinKind, WhatsappStatus } from "@/domain/types";
 
 export type TeamSchedule = {
@@ -86,7 +88,20 @@ export interface JobRepository {
   saveWeeklySummary(teamId: string, weekStart: string, body: string): Promise<void>;
   getWeeklySummary(teamId: string, weekStart: string): Promise<string | null>;
   setWhatsappStatusByInstance(instance: string, status: WhatsappStatus): Promise<void>;
+  listDueCharges(teamId: string, today: string): Promise<{ ownerName: string; milestone: string }[]>;
+  listWeekDeliveries(teamId: string, weekStart: string): Promise<{ ownerName: string; title: string; on: string }[]>;
+  claimCalendarSlot(userId: string, kind: "manha" | "noite", forDate: string): Promise<boolean>;
 }
+
+export type LinkIssuer = {
+  issue(input: {
+    teamId: string;
+    userId: string;
+    projectId: string | null;
+    stepId: string | null;
+    action: LinkAction;
+  }): Promise<string>;
+};
 
 export type TextSender = {
   sendText(input: { to: string; text: string }): Promise<{ ok: boolean; messageId?: string; errorCode?: string }>;
@@ -105,6 +120,8 @@ export type JobDeps = {
   sleep?: (ms: number) => Promise<void>;
   gapMs?: number;
   ignoreSchedule?: boolean;
+  calendar?: CalendarProvider;
+  issueLink?: LinkIssuer;
 };
 
 export type JobResult = {

@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { GOOGLE_SCOPES } from "@/server/google-scopes";
 
 export async function GET(request: Request) {
   const origin = process.env.APP_BASE_URL || new URL(request.url).origin;
@@ -21,10 +22,7 @@ export async function GET(request: Request) {
   url.searchParams.set("response_type", "code");
   url.searchParams.set("access_type", "offline");
   url.searchParams.set("prompt", "consent");
-  url.searchParams.set(
-    "scope",
-    "https://www.googleapis.com/auth/chat.messages.create https://www.googleapis.com/auth/chat.spaces.create",
-  );
+  url.searchParams.set("scope", GOOGLE_SCOPES);
   url.searchParams.set("state", state);
   const response = NextResponse.redirect(url);
   response.cookies.set("foco_google_state", state, {

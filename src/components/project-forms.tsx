@@ -55,7 +55,14 @@ export function ProjectEditor({
   values,
 }: {
   projectId?: string;
-  values: { title: string; brief: string; visibility: "privado" | "compartilhado"; nextMilestone: string; nextMilestoneOn: string };
+  values: {
+    title: string;
+    brief: string;
+    visibility: "privado" | "compartilhado";
+    nextMilestone: string;
+    nextMilestoneOn: string;
+    chargeOn: string;
+  };
 }) {
   const [message, setMessage] = useState<string | null>(null);
   const form = useForm({ resolver: zodResolver(projectSchema), defaultValues: values });
@@ -85,6 +92,9 @@ export function ProjectEditor({
       </Field>
       <Field label="Data do marco" htmlFor="nextMilestoneOn">
         <Input id="nextMilestoneOn" type="date" {...form.register("nextMilestoneOn")} />
+      </Field>
+      <Field label="Cobrar em" htmlFor="chargeOn" hint="No quadro, só aparece se o projeto estiver compartilhado.">
+        <Input id="chargeOn" type="date" {...form.register("chargeOn")} />
       </Field>
       <Message text={message} />
       <Button type="submit" size="block">

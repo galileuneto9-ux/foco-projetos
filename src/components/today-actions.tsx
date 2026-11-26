@@ -12,6 +12,7 @@ export function TodayActions({ stepId, projectId }: { stepId: string; projectId:
       <div className="grid grid-cols-3 gap-2">
         <Button
           type="button"
+          variant="outline"
           onClick={async () => {
             const result = await completeStep(stepId);
             setMessage(result.ok ? "Passo concluído." : result.message);
@@ -31,13 +32,13 @@ export function TodayActions({ stepId, projectId }: { stepId: string; projectId:
         </Button>
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
           onClick={async () => {
             const result = await markStuck(projectId);
-            setMessage(result.ok ? "Marcado como travado." : result.message);
+            setMessage(result.ok ? "Marcado." : result.message);
           }}
         >
-          Travado
+          Pular o dia
         </Button>
       </div>
       {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}

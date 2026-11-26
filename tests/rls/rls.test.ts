@@ -85,6 +85,7 @@ beforeAll(async () => {
       "tests/rls/prelude.sql",
       "supabase/migrations/20261126120000_schema.sql",
       "supabase/migrations/20261126120100_rls.sql",
+      "supabase/migrations/20261126180000_foco_ux.sql",
     ]) {
       await admin.query(readFileSync(path.join(root, file), "utf8"));
     }
@@ -316,11 +317,11 @@ test("teto de 3 recusa o quarto ativo e libera depois de pausar", async () => {
   });
 });
 
-test("minutos fora de 15–30 e dois passos atuais são recusados", async () => {
+test("minutos fora de 5–25 e dois passos atuais são recusados", async () => {
   await withRole(ownerA, "authenticated", async (client) => {
     const minutes = await tryQuery(
       client,
-      "insert into public.project_steps (team_id, project_id, title, done_when, minutes, position) values ($1, $2, 'Curto', 'Pronto', 10, 2)",
+      "insert into public.project_steps (team_id, project_id, title, done_when, minutes, position) values ($1, $2, 'Curto', 'Pronto', 4, 2)",
       [ids.teamA, ids.privateA],
     );
     expect(minutes.ok).toBe(false);
@@ -374,6 +375,43 @@ test("membro não convida, não remove e não lê conexão; owner lê o status",
     const team = await tryQuery(client, "update public.teams set name = 'Time A revisado' where id = $1", [ids.teamA]);
     expect(team.ok).toBe(true);
   });
+});
+
+test("link de um toque e projeto privado não aparecem para o colega", async () => {
+  const admin = await pool.connect();
+  let linkId = "";
+  try {
+    const inserted = await admin.query(
+      `insert into public.action_links (team_id, user_id, project_id, action, token_hash, expires_at)
+       values ($1, $2, $3, 'concluir', 'hash-ux', now() + interval '1 day') returning id`,
+      [ids.teamA, ownerA, ids.privateA],
+    );
+    linkId = inserted.rows[0].id as string;
+    await admin.query("update public.projects set charge_on = '2026-12-03' where id = $1", [ids.privateA]);
+    await admin.query("update public.projects set charge_on = '2026-12-01' where id = $1", [ids.sharedA]);
+  } finally {
+    admin.release();
+  }
+  await withRole(memberA, "authenticated", async (client) => {
+    const links = await client.query("select id from public.action_links");
+    expect(links.rowCount).toBe(0);
+    const hidden = await client.query("select id from public.projects where id = $1", [ids.privateA]);
+    expect(hidden.rowCount).toBe(0);
+    const shared = await client.query("select charge_on from public.projects where id = $1", [ids.sharedA]);
+    expect(shared.rows[0]?.charge_on).toBeTruthy();
+    const insertLink = await tryQuery(
+      client,
+      "insert into public.action_links (team_id, user_id, action, token_hash, expires_at) values ($1, $2, 'fiz', 'hash-membro', now() + interval '1 hour')",
+      [ids.teamA, memberA],
+    );
+    expect(insertLink.ok).toBe(false);
+  });
+  await withRole(ownerB, "authenticated", async (client) => {
+    const shared = await client.query("select id from public.projects where id = $1", [ids.sharedA]);
+    expect(shared.rowCount).toBe(0);
+  });
+  await pool.query("delete from public.action_links where id = $1", [linkId]);
+  await pool.query("update public.projects set charge_on = null where id in ($1, $2)", [ids.privateA, ids.sharedA]);
 });
 
 test("membro não conclui passo de outra pessoa e o service role enxerga o privado", async () => {

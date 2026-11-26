@@ -2,6 +2,8 @@ import { buildEveningMessage, buildMorningMessage, buildStallMessage, buildTeamN
 import { isStalled } from "@/domain/rules";
 import { buildWeeklySummary } from "@/domain/summary";
 import { isWithinSlot, previousWeekStart, saoPauloParts, todayInSaoPaulo, weekStartSaoPaulo } from "@/domain/time";
+import { scheduleEveningCalendar, scheduleMorningCalendar } from "@/server/jobs/calendar-schedule";
+import { formatWeekDeliveries } from "@/domain/focus";
 import { deliverGoogleChat, deliverWhatsapp } from "@/server/jobs/deliver";
 import { emptyJobResult, type ActiveWork, type JobDeps, type JobResult, type MemberChannel } from "@/server/jobs/repository";
 
@@ -58,6 +60,7 @@ export async function runMorningJob(deps: JobDeps): Promise<JobResult> {
         sentInRun,
       });
     }
+    await scheduleMorningCalendar({ deps, teamId: team.id, members, work, forDate });
   }
   return result;
 }
@@ -100,6 +103,7 @@ export async function runEveningJob(deps: JobDeps): Promise<JobResult> {
         sentInRun,
       });
     }
+    await scheduleEveningCalendar({ deps, teamId: team.id, members, work, forDate });
   }
   return result;
 }
@@ -232,15 +236,22 @@ export async function runSummaryJob(deps: JobDeps): Promise<JobResult> {
       deps.repo.listWeeklyCheckins(team.id, weekStart),
       deps.repo.googleConnected(team.id),
     ]);
-    const body = buildWeeklySummary({
-      weekStart,
-      members: members.map((member) => ({ userId: member.userId, displayName: member.displayName })),
-      checkins: checkins.map((checkin) => ({
-        userId: checkin.userId,
-        status: checkin.status,
-        answerText: checkin.answerText,
-      })),
-    });
+    const deliveries = await deps.repo.listWeekDeliveries(team.id, weekStart);
+    const deliveryText = formatWeekDeliveries(deliveries);
+    const body = [
+      buildWeeklySummary({
+        weekStart,
+        members: members.map((member) => ({ userId: member.userId, displayName: member.displayName })),
+        checkins: checkins.map((checkin) => ({
+          userId: checkin.userId,
+          status: checkin.status,
+          answerText: checkin.answerText,
+        })),
+      }),
+      deliveryText,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
     await deps.repo.saveWeeklySummary(team.id, weekStart, body);
     const owner = members.find((member) => member.role === "owner");
     if (owner?.notifyGoogleChat && owner.googleChatSpaceId && connected) {

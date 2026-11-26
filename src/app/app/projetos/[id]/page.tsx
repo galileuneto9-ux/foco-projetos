@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { progressCopy } from "@/domain/focus";
 import { BreakSteps, FlagButtons, ManualStepForm, NoteForm, ProjectEditor, StepActions } from "@/components/project-forms";
+import { ProgressBlock } from "@/components/progress-bar";
 import { StatusButtons } from "@/components/status-buttons";
 import { requireMember } from "@/server/session";
 
@@ -16,12 +18,15 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     .eq("project_id", id)
     .order("position");
   const { data: notes } = await supabase.from("project_notes").select("id, body, created_at").eq("project_id", id).order("created_at", { ascending: false });
+  const done = (steps ?? []).filter((step) => step.status === "feito" || step.status === "pulado").length;
+  const progress = progressCopy({ done, total: (steps ?? []).length, milestoneOn: project.next_milestone_on });
   return (
     <div className="grid gap-6">
       <Link href="/app/fila" className="text-sm underline">
         Voltar
       </Link>
-      <h1 className="font-serif text-3xl">{project.title}</h1>
+      <h1 className="font-serif text-3xl">{progress.delivered ? "Entregue" : project.title}</h1>
+      <ProgressBlock done={done} total={(steps ?? []).length} milestoneOn={project.next_milestone_on} />
       <StatusButtons projectId={project.id} status={project.status} />
       <FlagButtons projectId={project.id} flag={project.board_flag} />
       <ProjectEditor
@@ -32,6 +37,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           visibility: project.visibility,
           nextMilestone: project.next_milestone ?? "",
           nextMilestoneOn: project.next_milestone_on ?? "",
+          chargeOn: project.charge_on ?? "",
         }}
       />
       <section className="grid gap-3">

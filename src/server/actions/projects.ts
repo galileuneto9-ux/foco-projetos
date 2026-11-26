@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { manualStepSchema, noteSchema, projectSchema, quickIdeaSchema } from "@/domain/schemas";
+import { tinyStep } from "@/domain/focus";
 import { normalizeConfirmedSteps } from "@/domain/rules";
 import type { StepDraft } from "@/domain/types";
 import { resolveStepBreaker } from "@/integrations/ai";
@@ -53,6 +54,7 @@ export async function createProject(input: unknown) {
       visibility: parsed.data.visibility,
       next_milestone: parsed.data.nextMilestone || null,
       next_milestone_on: parsed.data.nextMilestoneOn || null,
+      charge_on: parsed.data.chargeOn || null,
       status: "fila",
       position: await nextPosition(supabase, user.id),
     })
@@ -74,6 +76,7 @@ export async function updateProject(projectId: string, input: unknown) {
       visibility: parsed.data.visibility,
       next_milestone: parsed.data.nextMilestone || null,
       next_milestone_on: parsed.data.nextMilestoneOn || null,
+      charge_on: parsed.data.chargeOn || null,
     })
     .eq("id", projectId);
   if (error) return { ok: false as const, message: dbError(error, "Não foi possível salvar.") };
@@ -228,6 +231,38 @@ export async function skipStep(stepId: string) {
   if (error) return { ok: false as const, message: dbError(error, "Não foi possível pular.") };
   revalidatePath("/app");
   return { ok: true as const };
+}
+
+export async function proposeTinyStep(projectId: string) {
+  const { supabase } = await requireMember();
+  const { data: current } = await supabase
+    .from("project_steps")
+    .select("title")
+    .eq("project_id", projectId)
+    .eq("status", "atual")
+    .maybeSingle();
+  const { data: project } = await supabase.from("projects").select("title").eq("id", projectId).maybeSingle();
+  if (!project) return { ok: false as const, message: "Projeto não encontrado." };
+  return { ok: true as const, step: tinyStep(current?.title || project.title) };
+}
+
+export async function acceptTinyStep(projectId: string, step: StepDraft) {
+  const saved = await saveSteps(projectId, [step]);
+  if (!saved.ok) return saved;
+  const { supabase } = await requireMember();
+  const { data: created } = await supabase
+    .from("project_steps")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("title", step.title)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!created) return { ok: false as const, message: "O passo curto não entrou." };
+  const { error } = await supabase.rpc("set_current_step", { p_step: created.id });
+  if (error) return { ok: false as const, message: dbError(error, "Não foi possível trocar o passo.") };
+  revalidatePath("/app");
+  return { ok: true as const, message: "O passo de 5 minutos é o atual." };
 }
 
 export async function addNote(projectId: string, input: unknown) {

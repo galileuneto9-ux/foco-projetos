@@ -1,11 +1,25 @@
 import Link from "next/link";
 import { effectiveBoardFlag } from "@/domain/rules";
-import { formatDatePt, todayInSaoPaulo } from "@/domain/time";
-import { Badge } from "@/components/ui/badge";
+import { boardUrgency, dueToCharge, formatDayMonth, formatWeekDeliveries, urgencyRank, weekEndSaoPaulo } from "@/domain/focus";
+import { todayInSaoPaulo, weekStartSaoPaulo } from "@/domain/time";
+import { ChargeControls, CopyTextButton } from "@/components/charge-controls";
+import { ProgressBlock } from "@/components/progress-bar";
 import { Card } from "@/components/ui/card";
-import { FLAG_LABEL } from "@/lib/labels";
-import type { BoardFlag } from "@/domain/types";
 import { requireMember } from "@/server/session";
+import type { BoardFlag } from "@/domain/types";
+import type { Urgency } from "@/domain/focus";
+
+const URGENCY_LABEL: Record<Urgency, string> = {
+  verde: "No prazo",
+  amarelo: "Nesta semana",
+  vermelho: "Atrasado",
+};
+
+const URGENCY_CLASS: Record<Urgency, string> = {
+  verde: "border-l-4 border-l-primary",
+  amarelo: "border-l-4 border-l-[#b8860b] bg-[#fbf6e4]",
+  vermelho: "border-l-4 border-l-destructive bg-[#fbeceb]",
+};
 
 export default async function TeamPage({
   searchParams,
@@ -16,27 +30,73 @@ export default async function TeamPage({
   const { supabase, member } = await requireMember();
   if (!member) return null;
   const today = todayInSaoPaulo();
+  const now = new Date();
+  const weekEnd = weekEndSaoPaulo(now);
+  const weekStart = weekStartSaoPaulo(now);
   const { data: members } = await supabase.from("team_members").select("user_id, display_name").eq("team_id", member.team_id);
   const names = new Map((members ?? []).map((row) => [row.user_id, row.display_name]));
-  let query = supabase
+  const { data: projects } = await supabase
     .from("projects")
-    .select("id, title, owner_id, board_flag, status, next_milestone, next_milestone_on, visibility")
+    .select("id, title, owner_id, board_flag, status, next_milestone, next_milestone_on, charge_on, visibility")
     .eq("team_id", member.team_id)
-    .eq("visibility", "compartilhado")
-    .order("title");
-  if (params.dono) query = query.eq("owner_id", params.dono);
-  const { data: projects } = await query;
+    .eq("visibility", "compartilhado");
+  const ids = (projects ?? []).map((project) => project.id);
+  const { data: steps } = ids.length
+    ? await supabase.from("project_steps").select("project_id, status").in("project_id", ids)
+    : { data: [] };
+  const counts = new Map<string, { done: number; total: number }>();
+  for (const step of steps ?? []) {
+    const current = counts.get(step.project_id) ?? { done: 0, total: 0 };
+    current.total += 1;
+    if (step.status === "feito" || step.status === "pulado") current.done += 1;
+    counts.set(step.project_id, current);
+  }
   const cards = (projects ?? [])
-    .map((project) => ({
-      ...project,
-      flag: effectiveBoardFlag({
-        boardFlag: project.board_flag,
+    .map((project) => {
+      const flag = effectiveBoardFlag({
+        boardFlag: project.board_flag as BoardFlag,
         status: project.status,
         nextMilestoneOn: project.next_milestone_on,
         today,
-      }),
-    }))
-    .filter((project) => !params.bandeira || project.flag === params.bandeira);
+      });
+      const urgency = boardUrgency({ flag, milestoneOn: project.next_milestone_on, today, weekEnd });
+      return { ...project, flag, urgency, ...(counts.get(project.id) ?? { done: 0, total: 0 }) };
+    })
+    .filter((project) => !params.dono || project.owner_id === params.dono)
+    .filter((project) => !params.bandeira || project.urgency === params.bandeira)
+    .sort((a, b) => urgencyRank(a.urgency) - urgencyRank(b.urgency) || String(a.charge_on ?? "9").localeCompare(String(b.charge_on ?? "9")));
+  const charges = dueToCharge(
+    (projects ?? []).map((project) => ({
+      ...project,
+      chargeOn: project.charge_on,
+      visibility: project.visibility,
+    })),
+    today,
+  );
+  const { data: deliveries } = ids.length
+    ? await supabase
+        .from("deliveries")
+        .select("title, user_id, completed_at, project_id")
+        .in("project_id", ids)
+        .gte("completed_at", `${weekStart}T00:00:00.000Z`)
+    : { data: [] };
+  const deliveryLines = (deliveries ?? []).map((row) => ({
+    ownerName: names.get(row.user_id) ?? "Alguém",
+    title: row.title,
+    on: String(row.completed_at).slice(0, 10),
+  }));
+  const summary = formatWeekDeliveries(deliveryLines);
+
+  function chip(href: string, label: string, active: boolean) {
+    return (
+      <Link
+        href={href}
+        className={`inline-flex min-h-11 items-center rounded-full px-3 text-sm ${active ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}`}
+      >
+        {label}
+      </Link>
+    );
+  }
 
   return (
     <div className="grid gap-5">
@@ -48,45 +108,51 @@ export default async function TeamPage({
           </Link>
         ) : null}
       </div>
-      <form className="grid grid-cols-2 gap-2" method="get">
-        <label className="grid gap-1 text-sm">
-          Dono
-          <select name="dono" defaultValue={params.dono ?? ""} className="min-h-11 rounded-xl border border-border bg-card px-2">
-            <option value="">Todos</option>
-            {(members ?? []).map((person) => (
-              <option key={person.user_id} value={person.user_id}>
-                {person.display_name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="grid gap-1 text-sm">
-          Bandeira
-          <select name="bandeira" defaultValue={params.bandeira ?? ""} className="min-h-11 rounded-xl border border-border bg-card px-2">
-            <option value="">Todas</option>
-            <option value="no_prazo">No prazo</option>
-            <option value="atrasado">Atrasado</option>
-            <option value="travado">Travado</option>
-          </select>
-        </label>
-        <button type="submit" className="col-span-2 min-h-11 rounded-xl bg-muted">
-          Filtrar
-        </button>
-      </form>
+      <section className="grid gap-3">
+        <h2 className="font-serif text-2xl">Cobrar hoje</h2>
+        {charges.length === 0 ? <p className="text-sm text-muted-foreground">Nada vencido hoje.</p> : null}
+        {charges.map((project) => (
+          <Card key={project.id} className="grid gap-2">
+            <p className="font-medium">{names.get(project.owner_id) ?? "Alguém"}</p>
+            <p className="text-sm text-muted-foreground">{project.next_milestone || project.title}</p>
+            <ChargeControls projectId={project.id} />
+          </Card>
+        ))}
+      </section>
+      <div className="flex flex-wrap gap-2">
+        {chip("/app/time", "Todos", !params.dono && !params.bandeira)}
+        {(members ?? []).map((person) =>
+          chip(`/app/time?dono=${person.user_id}`, person.display_name.slice(0, 1).toUpperCase(), params.dono === person.user_id),
+        )}
+        {chip("/app/time?bandeira=verde", "No prazo", params.bandeira === "verde")}
+        {chip("/app/time?bandeira=amarelo", "Nesta semana", params.bandeira === "amarelo")}
+        {chip("/app/time?bandeira=vermelho", "Atrasado", params.bandeira === "vermelho")}
+      </div>
       {cards.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum projeto compartilhado com esse filtro.</p> : null}
       {cards.map((project) => (
-        <Card key={project.id} className="grid gap-2">
+        <Card key={project.id} className={`grid gap-2 ${URGENCY_CLASS[project.urgency]}`}>
           <div className="flex items-start justify-between gap-3">
             <h2 className="font-serif text-2xl">{project.title}</h2>
-            <Badge tone={project.flag === "atrasado" ? "late" : project.flag === "travado" ? "stuck" : "ok"}>
-              {FLAG_LABEL[project.flag as BoardFlag]}
-            </Badge>
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-sm font-medium">
+              {(names.get(project.owner_id) ?? "?").slice(0, 1).toUpperCase()}
+            </span>
           </div>
-          <p className="text-sm">{names.get(project.owner_id) ?? "Alguém do time"}</p>
+          <p className="text-sm">{URGENCY_LABEL[project.urgency]}</p>
           <p className="text-sm text-muted-foreground">{project.next_milestone || "Sem marco"}</p>
-          <p className="text-sm">{project.next_milestone_on ? formatDatePt(project.next_milestone_on) : "Sem data"}</p>
+          {project.charge_on ? <p className="text-sm">Cobrar em {formatDayMonth(project.charge_on)}</p> : null}
+          <ProgressBlock done={project.done} total={project.total} milestoneOn={project.next_milestone_on} compact />
         </Card>
       ))}
+      <section className="grid gap-3">
+        <h2 className="font-serif text-2xl">Entregas da semana</h2>
+        {deliveryLines.length === 0 ? <p className="text-sm text-muted-foreground">Nada concluído nesta semana.</p> : null}
+        {deliveryLines.map((item, index) => (
+          <p key={`${item.title}-${index}`} className="text-sm">
+            {item.ownerName} · {item.title} · {formatDayMonth(item.on)}
+          </p>
+        ))}
+        {summary ? <CopyTextButton text={summary} label="Copiar resumo" /> : null}
+      </section>
     </div>
   );
 }

@@ -29,6 +29,9 @@ export class MemoryRepo implements JobRepository {
   summaries = new Map<string, string>();
   webhooks = new Set<string>();
   stuck = new Set<string>();
+  dueCharges: { teamId: string; ownerName: string; milestone: string; chargeOn: string }[] = [];
+  weekDeliveries: { teamId: string; weekStart: string; ownerName: string; title: string; on: string }[] = [];
+  calendarKeys = new Set<string>();
 
   async listTeams() {
     return this.teams;
@@ -170,5 +173,25 @@ export class MemoryRepo implements JobRepository {
     for (const [teamId, name] of this.instances) {
       if (name === instance) this.connections.set(teamId, status);
     }
+  }
+
+  async listDueCharges(teamId: string, today: string) {
+    return this.dueCharges
+      .filter((item) => item.teamId === teamId && item.chargeOn <= today)
+      .slice(0, 3)
+      .map(({ ownerName, milestone }) => ({ ownerName, milestone }));
+  }
+
+  async listWeekDeliveries(teamId: string, weekStart: string) {
+    return this.weekDeliveries
+      .filter((item) => item.teamId === teamId && item.weekStart === weekStart)
+      .map(({ ownerName, title, on }) => ({ ownerName, title, on }));
+  }
+
+  async claimCalendarSlot(userId: string, kind: "manha" | "noite", forDate: string) {
+    const key = `${userId}:${kind}:${forDate}`;
+    if (this.calendarKeys.has(key)) return false;
+    this.calendarKeys.add(key);
+    return true;
   }
 }

@@ -1,6 +1,11 @@
+import { googleEventBody } from "@/domain/focus";
+import { decryptSecret } from "@/integrations/crypto";
+import { FakeCalendar } from "@/integrations/calendar/fake";
+import type { CalendarProvider } from "@/integrations/calendar/types";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { issueActionLink } from "@/server/action-links";
 import { SupabaseJobRepo } from "@/server/jobs/supabase-repo";
-import type { JobDeps, SpaceSender, TextSender } from "@/server/jobs/repository";
+import type { JobDeps, LinkIssuer, SpaceSender, TextSender } from "@/server/jobs/repository";
 
 function whatsappSender(admin: ReturnType<typeof createAdminClient>): TextSender {
   return {
@@ -86,12 +91,87 @@ function googleSender(admin: ReturnType<typeof createAdminClient>): SpaceSender 
   };
 }
 
+async function googleAccessToken(admin: ReturnType<typeof createAdminClient>, teamId: string): Promise<string | null> {
+  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+  const key = process.env.TOKEN_ENCRYPTION_KEY;
+  if (!clientId || !clientSecret || !key) return null;
+  const { data: connection } = await admin
+    .from("google_oauth_connections")
+    .select("refresh_token_secret_ref")
+    .eq("team_id", teamId)
+    .maybeSingle();
+  if (!connection) return null;
+  const { data: secret } = await admin
+    .from("google_oauth_secrets")
+    .select("ciphertext")
+    .eq("id", connection.refresh_token_secret_ref)
+    .maybeSingle();
+  if (!secret || secret.ciphertext === "fake") return null;
+  const refreshToken = decryptSecret(secret.ciphertext, key);
+  const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: "refresh_token",
+    }),
+  });
+  if (!tokenResponse.ok) return null;
+  const body = (await tokenResponse.json()) as { access_token?: string };
+  return body.access_token ?? null;
+}
+
+function calendarProvider(admin: ReturnType<typeof createAdminClient>): CalendarProvider {
+  if ((process.env.CALENDAR_PROVIDER || "fake") !== "google") return new FakeCalendar();
+  return {
+    async createEvent(input) {
+      const token = await googleAccessToken(admin, input.teamId);
+      if (!token) return { ok: false, errorCode: "SEM_TOKEN" };
+      const response = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify(googleEventBody(input)),
+      });
+      if (!response.ok) return { ok: false, errorCode: `HTTP_${response.status}` };
+      const body = (await response.json().catch(() => ({}))) as { id?: string };
+      return { ok: true, eventId: body.id };
+    },
+  };
+}
+
+function linkIssuer(admin: ReturnType<typeof createAdminClient>): LinkIssuer {
+  return {
+    async issue(input) {
+      const secret = process.env.ACTION_LINK_SECRET;
+      const base = (process.env.APP_BASE_URL || "http://localhost:3000").replace(/\/$/, "");
+      if (!secret) return `${base}/app`;
+      const issued = issueActionLink(input, secret);
+      const { error } = await admin.from("action_links").insert({
+        team_id: input.teamId,
+        user_id: input.userId,
+        project_id: input.projectId,
+        step_id: input.stepId,
+        action: input.action,
+        token_hash: issued.hash,
+        expires_at: new Date(issued.payload.exp * 1000).toISOString(),
+      });
+      if (error) return `${base}/app`;
+      return `${base}/toque?t=${encodeURIComponent(issued.token)}`;
+    },
+  };
+}
+
 export function createJobDeps(now = new Date()): JobDeps {
   const admin = createAdminClient();
   return {
     repo: new SupabaseJobRepo(admin),
     whatsapp: whatsappSender(admin),
     googleChat: googleSender(admin),
+    calendar: calendarProvider(admin),
+    issueLink: linkIssuer(admin),
     now,
     appUrl: process.env.APP_BASE_URL || "http://localhost:3000",
     gapMs: 3000,

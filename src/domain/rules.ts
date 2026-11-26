@@ -47,15 +47,15 @@ export function normalizeConfirmedSteps(steps: StepDraft[]): StepDraft[] {
     if (doneWhen.length < 1 || doneWhen.length > 400) {
       throw new Error("Descreva quando o passo está pronto.");
     }
-    if (!Number.isInteger(step.minutes) || step.minutes < 15 || step.minutes > 30) {
-      throw new Error("O passo precisa ter entre 15 e 30 minutos.");
+    if (!Number.isInteger(step.minutes) || step.minutes < 5 || step.minutes > 25) {
+      throw new Error("O passo precisa ter entre 5 e 25 minutos.");
     }
     return { title, doneWhen, minutes: step.minutes };
   });
 }
 
 export function assertStepMinutes(minutes: number): void {
-  if (!Number.isInteger(minutes) || minutes < 15 || minutes > 30) {
-    throw new Error("O passo precisa ter entre 15 e 30 minutos.");
+  if (!Number.isInteger(minutes) || minutes < 5 || minutes > 25) {
+    throw new Error("O passo precisa ter entre 5 e 25 minutos.");
   }
 }

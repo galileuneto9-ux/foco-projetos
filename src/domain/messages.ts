@@ -30,7 +30,7 @@ export function buildEveningMessage(appUrl: string): string {
 
 export function buildStallMessage(projectTitles: string[], stallDays: number, appUrl: string): string {
   const names = projectTitles.slice(0, 3).join(", ");
-  return `O projeto ${names} está parado há ${stallDays} dias. Quando puder, abra o app: ${appUrl}`;
+  return `Sem movimento há ${stallDays} dias: ${names}. ${appUrl}`;
 }
 
 export function buildTeamNotice(input: { kind: "semanal" | "resumo"; appUrl: string }): string {

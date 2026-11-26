@@ -41,12 +41,17 @@ export const projectSchema = z.object({
     .trim()
     .refine((value) => value === "" || /^\d{4}-\d{2}-\d{2}$/.test(value), "Data inválida.")
     .default(""),
+  chargeOn: z
+    .string()
+    .trim()
+    .refine((value) => value === "" || /^\d{4}-\d{2}-\d{2}$/.test(value), "Data inválida.")
+    .default(""),
 });
 
 export const manualStepSchema = z.object({
   title: z.string().trim().min(1, "Dê um nome ao passo.").max(160),
   doneWhen: z.string().trim().min(1, "Descreva quando está pronto.").max(400),
-  minutes: z.coerce.number().int().min(15, "Entre 15 e 30 minutos.").max(30, "Entre 15 e 30 minutos."),
+  minutes: z.coerce.number().int().min(5, "Entre 5 e 25 minutos.").max(25, "Entre 5 e 25 minutos."),
 });
 
 export const weeklyCheckinSchema = z.object({

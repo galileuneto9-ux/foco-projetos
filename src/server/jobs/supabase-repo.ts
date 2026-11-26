@@ -322,4 +322,70 @@ export class SupabaseJobRepo implements JobRepository {
       .eq("evolution_instance", instance);
     if (error) fail("whatsapp_status", error);
   }
+
+  async listDueCharges(teamId: string, today: string) {
+    const { data, error } = await this.admin
+      .from("projects")
+      .select("next_milestone, title, owner_id, charge_on")
+      .eq("team_id", teamId)
+      .eq("visibility", "compartilhado")
+      .not("charge_on", "is", null)
+      .lte("charge_on", today)
+      .order("charge_on")
+      .limit(3);
+    if (error) fail("charges", error);
+    const members = await this.listMembers(teamId);
+    const names = new Map(members.map((member) => [member.userId, member.displayName]));
+    return (data ?? []).map((row) => ({
+      ownerName: names.get(row.owner_id) ?? "Alguém",
+      milestone: row.next_milestone || row.title,
+    }));
+  }
+
+  async listWeekDeliveries(teamId: string, weekStart: string) {
+    const { data: projects, error } = await this.admin
+      .from("projects")
+      .select("id")
+      .eq("team_id", teamId)
+      .eq("visibility", "compartilhado");
+    if (error) fail("deliveries_projects", error);
+    const ids = (projects ?? []).map((project) => project.id);
+    if (ids.length === 0) return [];
+    const end = new Date(`${weekStart}T00:00:00.000Z`);
+    end.setUTCDate(end.getUTCDate() + 7);
+    const { data, error: deliveryError } = await this.admin
+      .from("deliveries")
+      .select("title, user_id, completed_at")
+      .in("project_id", ids)
+      .gte("completed_at", `${weekStart}T00:00:00.000Z`)
+      .lt("completed_at", end.toISOString());
+    if (deliveryError) fail("deliveries", deliveryError);
+    const members = await this.listMembers(teamId);
+    const names = new Map(members.map((member) => [member.userId, member.displayName]));
+    return (data ?? []).map((row) => ({
+      ownerName: names.get(row.user_id) ?? "Alguém",
+      title: row.title,
+      on: String(row.completed_at).slice(0, 10),
+    }));
+  }
+
+  async claimCalendarSlot(userId: string, kind: "manha" | "noite", forDate: string) {
+    const member = await this.findMemberTeam(userId);
+    if (!member) return false;
+    const { error } = await this.admin.from("calendar_events").insert({
+      team_id: member,
+      user_id: userId,
+      kind,
+      for_date: forDate,
+    });
+    if (error?.code === "23505") return false;
+    if (error) fail("calendar_slot", error);
+    return true;
+  }
+
+  private async findMemberTeam(userId: string) {
+    const { data, error } = await this.admin.from("team_members").select("team_id").eq("user_id", userId).maybeSingle();
+    if (error) fail("member_team", error);
+    return data?.team_id ?? null;
+  }
 }

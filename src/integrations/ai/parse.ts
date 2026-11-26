@@ -7,7 +7,7 @@ const modelStepsSchema = z.object({
       z.object({
         title: z.string().trim().min(1).max(160),
         doneWhen: z.string().trim().min(1).max(400),
-        minutes: z.number().int().min(15).max(30),
+        minutes: z.number().int().min(5).max(25),
       }),
     )
     .min(1)

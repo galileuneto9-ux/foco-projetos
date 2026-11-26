@@ -77,6 +77,8 @@ Copie `.env.example`. Ele não tem valores. Segredo não entra no git, no log ne
 | `GOOGLE_OAUTH_CLIENT_SECRET` | só servidor | OAuth do Google Chat |
 | `GOOGLE_OAUTH_REDIRECT_URI` | só servidor | `{APP_BASE_URL}/api/google/callback` |
 | `TOKEN_ENCRYPTION_KEY` | só servidor | 32 bytes em base64, cifra o refresh token |
+| `CALENDAR_PROVIDER` | só servidor | `fake` (padrão) ou `google`. O google usa o mesmo OAuth, com o escopo `calendar.events` |
+| `ACTION_LINK_SECRET` | só servidor | HMAC dos links de um toque (Concluí, Fiz, Não fiz, Travado) |
 | `AI_PROVIDER` | só servidor | `fake` (padrão) ou `openai` |
 | `AI_API_KEY` | só servidor | chave do provedor. Sem chave, o passo é manual |
 | `AI_API_BASE_URL` | só servidor | padrão `https://api.openai.com/v1` |

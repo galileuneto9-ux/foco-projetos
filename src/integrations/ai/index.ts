@@ -58,7 +58,7 @@ class OpenAiStepBreaker implements StepBreaker {
           {
             role: "system",
             content:
-              "Quebre a ideia em passos de 15 a 30 minutos. Responda só JSON: {\"steps\":[{\"title\",\"doneWhen\",\"minutes\"}]}. doneWhen é observável. No máximo 8 passos. Português do Brasil.",
+              "Quebre a ideia em passos curtos. O primeiro dura de 5 a 10 minutos; os seguintes, de 15 a 25. title tem no máximo 8 palavras, com verbo e objeto, sem prefixo. doneWhen é um resultado observável e não repete o title. Responda só JSON: {\"steps\":[{\"title\",\"doneWhen\",\"minutes\"}]}. No máximo 6 passos. Português do Brasil.",
           },
           { role: "user", content: brief },
         ],
