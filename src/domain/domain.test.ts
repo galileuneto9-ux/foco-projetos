@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { shapeStepTitle } from "@/domain/focus";
 import { breakBriefIntoSteps } from "@/integrations/ai/fake";
 import { parseModelSteps } from "@/integrations/ai/parse";
 import { normalizeBrazilPhone, parseWhatsappAnswer } from "@/domain/phone";
@@ -33,7 +34,10 @@ describe("passos", () => {
     expect(first[0]?.minutes).toBeGreaterThanOrEqual(5);
     expect(first[0]?.minutes).toBeLessThanOrEqual(10);
     expect(first[0]?.title.split(/\s+/).length).toBeLessThanOrEqual(8);
-    expect(first[0]?.title.toLowerCase().startsWith("esclarecer")).toBe(false);
+    expect(first[0]?.title.toLowerCase()).not.toMatch(/esclarecer o resultado|fazer o miolo|revisar e fechar/);
+    expect(shapeStepTitle("Começar Fazer o miolo de: escrever o roteiro")).toBe("Começar escrever o roteiro");
+    expect(shapeStepTitle("Esclarecer o resultado de: Fazer o miolo de: publicar a nota")).toBe("Publicar a nota");
+    expect(shapeStepTitle("Revisar e fechar: enviar o texto")).toBe("Enviar o texto");
     expect(first[0]?.doneWhen.includes(first[0].title)).toBe(false);
     for (const step of first.slice(1)) {
       expect(step.minutes).toBeGreaterThanOrEqual(15);

@@ -86,6 +86,7 @@ beforeAll(async () => {
       "supabase/migrations/20261126120000_schema.sql",
       "supabase/migrations/20261126120100_rls.sql",
       "supabase/migrations/20261126180000_foco_ux.sql",
+      "supabase/migrations/20261126193000_limpa_prefixos_passos.sql",
     ]) {
       await admin.query(readFileSync(path.join(root, file), "utf8"));
     }
@@ -315,6 +316,25 @@ test("teto de 3 recusa o quarto ativo e libera depois de pausar", async () => {
     const freed = await tryQuery(client, "select public.activate_project($1)", [fourth.rows[0].id]);
     expect(freed.ok).toBe(true);
   });
+});
+
+test("migration limpa prefixo de modelo aninhado no título", async () => {
+  const admin = await pool.connect();
+  try {
+    const inserted = await admin.query(
+      `insert into public.project_steps (team_id, project_id, title, done_when, minutes, status, position)
+       values ($1, $2, 'Começar Fazer o miolo de: escrever o roteiro', 'Há uma linha.', 8, 'pendente', 9)
+       returning id`,
+      [ids.teamA, ids.privateA],
+    );
+    const id = inserted.rows[0].id as string;
+    await admin.query(readFileSync(path.join(path.resolve(__dirname, "../.."), "supabase/migrations/20261126193000_limpa_prefixos_passos.sql"), "utf8"));
+    const row = await admin.query("select title from public.project_steps where id = $1", [id]);
+    expect(row.rows[0]?.title).toBe("Começar escrever o roteiro");
+    await admin.query("delete from public.project_steps where id = $1", [id]);
+  } finally {
+    admin.release();
+  }
 });
 
 test("minutos fora de 5–25 e dois passos atuais são recusados", async () => {

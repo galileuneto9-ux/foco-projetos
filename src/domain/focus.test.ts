@@ -34,10 +34,11 @@ describe("foco do dia", () => {
   });
 
   it("propõe um passo de 5 minutos sem repetir um prefixo longo", () => {
-    const step = tinyStep("Escrever o roteiro inteiro do atendimento");
+    const step = tinyStep("Fazer o miolo de: escrever o roteiro inteiro do atendimento");
     expect(step.minutes).toBe(5);
     expect(step.title.split(/\s+/).length).toBeLessThanOrEqual(8);
-    expect(step.title.toLowerCase().startsWith("esclarecer")).toBe(false);
+    expect(step.title.toLowerCase()).not.toMatch(/miolo|esclarecer o resultado|revisar e fechar/);
+    expect(step.title.startsWith("Começar")).toBe(true);
   });
 
   it("cobra no máximo 3 projetos compartilhados vencidos", () => {

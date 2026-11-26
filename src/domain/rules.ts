@@ -1,3 +1,4 @@
+import { shapeStepTitle } from "@/domain/focus";
 import { ACTIVE_PROJECT_CAP, type BoardFlag, type StepDraft } from "@/domain/types";
 
 export const CAP_MESSAGE =
@@ -39,7 +40,7 @@ export function isStalled(input: {
 
 export function normalizeConfirmedSteps(steps: StepDraft[]): StepDraft[] {
   return steps.map((step) => {
-    const title = step.title.trim();
+    const title = shapeStepTitle(step.title);
     const doneWhen = step.doneWhen.trim();
     if (title.length < 1 || title.length > 160) {
       throw new Error("Título do passo inválido.");

@@ -1,12 +1,16 @@
 import type { StepDraft } from "@/domain/types";
 import { formatDatePt, saoPauloParts, weekStartSaoPaulo } from "@/domain/time";
 
+const TEMPLATE_PREFIX = /(?:esclarecer o resultado de|fazer o miolo de|revisar e fechar)\s*:?\s*/gi;
+
 export function shapeStepTitle(raw: string): string {
-  const stripped = raw
-    .replace(/^(esclarecer o resultado de|fazer o miolo de|revisar e fechar)\s*:\s*/i, "")
-    .replace(/[.!?;:]+$/g, "")
-    .trim();
-  const words = stripped.split(/\s+/).filter(Boolean).slice(0, 8);
+  let text = raw.trim();
+  let previous = "";
+  while (text !== previous) {
+    previous = text;
+    text = text.replace(TEMPLATE_PREFIX, " ").replace(/\s+/g, " ").replace(/^[:\-–—.\s]+/, "").trim();
+  }
+  const words = text.split(/\s+/).filter(Boolean).slice(0, 8);
   if (words.length === 0) return "Fazer o próximo passo";
   const [first, ...rest] = words;
   return [first.charAt(0).toUpperCase() + first.slice(1), ...rest].join(" ");
