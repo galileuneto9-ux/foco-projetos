@@ -1,3 +1,5 @@
+export const LINK_EXPIRED_MESSAGE = "Este link já foi usado ou expirou. Peça um novo a quem te convidou.";
+
 export function signupErrorMessage(error: { code?: string; message?: string } | null | undefined): string {
   const code = error?.code ?? "";
   const message = error?.message ?? "";

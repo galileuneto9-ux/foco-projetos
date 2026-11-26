@@ -1,8 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { GET } from "@/app/auth/callback/route";
+import { createClient } from "@/lib/supabase/server";
+
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: vi.fn(),
+}));
 import { requestPasswordReset, signUp } from "@/server/actions/auth";
 import { INVITE_ONLY_MESSAGE, OPEN_SIGNUP, PASSWORD_RESET_ENABLED } from "@/server/access";
-import { signupErrorMessage, teamFormDefaults, teamFromMetadata } from "@/server/auth-messages";
+import { LINK_EXPIRED_MESSAGE, signupErrorMessage, teamFormDefaults, teamFromMetadata } from "@/server/auth-messages";
 import { newPasswordSchema } from "@/domain/schemas";
 import { callbackNextPath, safeNextPath } from "@/server/safe-next";
 import { securityHeaders } from "@/server/security-headers";
@@ -38,6 +43,24 @@ describe("redirect depois do login", () => {
       new Request(`${ORIGIN}/auth/callback?type=recovery&next=${encodeURIComponent("//evil.example")}`),
     );
     expect(recoveryBypass.headers.get("location")).toBe(`${ORIGIN}/nova-senha`);
+  });
+
+  it("manda para o login quando o link de recovery já foi usado ou expirou", async () => {
+    vi.mocked(createClient).mockResolvedValue({
+      auth: {
+        exchangeCodeForSession: vi.fn().mockResolvedValue({ error: { message: "expired" } }),
+        verifyOtp: vi.fn().mockResolvedValue({ error: { message: "otp_expired" } }),
+      },
+    } as never);
+    const used = await GET(
+      new Request(`${ORIGIN}/auth/callback?type=recovery&token_hash=usado&next=${encodeURIComponent("https://evil.example")}`),
+    );
+    expect(used.headers.get("location")).toBe(`${ORIGIN}/login?erro=link_expirado`);
+    expect(LINK_EXPIRED_MESSAGE).toBe("Este link já foi usado ou expirou. Peça um novo a quem te convidou.");
+    const fresh = await GET(
+      new Request(`${ORIGIN}/auth/callback?type=recovery&code=valido&next=${encodeURIComponent("//evil.example")}`),
+    );
+    expect(fresh.headers.get("location")).toBe(`${ORIGIN}/login?erro=link_expirado`);
   });
 });
 

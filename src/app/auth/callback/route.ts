@@ -10,10 +10,11 @@ export async function GET(request: Request) {
   const next = callbackNextPath(type, url.searchParams.get("next"), url.origin);
   if (code || (tokenHash && type === "recovery")) {
     const supabase = await createClient();
-    if (code) {
-      await supabase.auth.exchangeCodeForSession(code);
-    } else if (tokenHash) {
-      await supabase.auth.verifyOtp({ type: "recovery", token_hash: tokenHash });
+    const exchanged = code
+      ? await supabase.auth.exchangeCodeForSession(code)
+      : await supabase.auth.verifyOtp({ type: "recovery", token_hash: tokenHash ?? "" });
+    if (exchanged.error) {
+      return NextResponse.redirect(new URL("/login?erro=link_expirado", url.origin));
     }
   }
   return NextResponse.redirect(new URL(next, url.origin));
