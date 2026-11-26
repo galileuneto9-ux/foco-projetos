@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { GET } from "@/app/auth/callback/route";
+import { requestPasswordReset, signUp } from "@/server/actions/auth";
+import { INVITE_ONLY_MESSAGE, OPEN_SIGNUP, PASSWORD_RESET_ENABLED } from "@/server/access";
 import { signupErrorMessage, teamFormDefaults, teamFromMetadata } from "@/server/auth-messages";
 import { safeNextPath } from "@/server/safe-next";
 import { securityHeaders } from "@/server/security-headers";
@@ -26,6 +28,23 @@ describe("redirect depois do login", () => {
     }
     const ok = await GET(new Request(`${ORIGIN}/auth/callback?next=${encodeURIComponent("/login")}`));
     expect(ok.headers.get("location")).toBe(`${ORIGIN}/login`);
+  });
+});
+
+describe("acesso só por convite", () => {
+  it("recusa cadastro aberto e não oferece recuperação por e-mail", async () => {
+    expect(OPEN_SIGNUP).toBe(false);
+    expect(PASSWORD_RESET_ENABLED).toBe(false);
+    const signup = await signUp({
+      displayName: "Ana",
+      teamName: "Time",
+      email: "ana@example.com",
+      password: "uma-senha-boa",
+    });
+    expect(signup).toEqual({ ok: false, message: INVITE_ONLY_MESSAGE });
+    const reset = await requestPasswordReset({ email: "ana@example.com" });
+    expect(reset.ok).toBe(false);
+    if (!reset.ok) expect(reset.message).toMatch(/desligada/);
   });
 });
 

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { LoginForm } from "@/components/auth-forms";
 import { PublicShell } from "@/components/public-shell";
+import { PASSWORD_RESET_ENABLED } from "@/server/access";
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ aviso?: string }> }) {
   const params = await searchParams;
@@ -13,14 +14,15 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       <div className="mt-6">
         <LoginForm />
       </div>
-      <p className="mt-4 text-sm">
-        <Link href="/esqueci-senha" className="underline">
-          Esqueci a senha
-        </Link>
-      </p>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Sem conta? <Link href="/cadastro" className="underline">Criar conta</Link>
-      </p>
+      {PASSWORD_RESET_ENABLED ? (
+        <p className="mt-4 text-sm">
+          <Link href="/esqueci-senha" className="underline">
+            Esqueci a senha
+          </Link>
+        </p>
+      ) : (
+        <p className="mt-4 text-sm text-muted-foreground">O acesso é só por convite.</p>
+      )}
     </PublicShell>
   );
 }

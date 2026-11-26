@@ -13,10 +13,8 @@ export default function HomePage() {
         <Button asChild size="block">
           <Link href="/login">Entrar</Link>
         </Button>
-        <Button asChild size="block" variant="outline">
-          <Link href="/cadastro">Criar conta</Link>
-        </Button>
       </div>
+      <p className="mt-4 text-sm text-muted-foreground">O acesso é só por convite.</p>
       <p className="mt-10 flex gap-4 text-sm text-muted-foreground">
         <Link href="/termos" className="underline">Termos</Link>
         <Link href="/privacidade" className="underline">Privacidade</Link>

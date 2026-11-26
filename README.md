@@ -2,7 +2,7 @@
 
 App pessoal para terminar o que começou: no máximo 3 projetos ativos, o resto na fila, e um quadro do time só com o que for compartilhado. A cobrança do passo vai no WhatsApp (1:1) e no app. O Google Chat leva só aviso do time, com link, sem o texto do passo.
 
-Uso próprio do Galileu e do time. Não é produto à venda. Não promete resultado.
+Uso próprio do Galileu e do time. Não é produto à venda. Não promete resultado. Por enquanto a entrada é só por convite: não há cadastro aberto. Quem cria o time convida pelo app, e a pessoa define a senha em `/convite`.
 
 ## O que entra
 
@@ -26,7 +26,19 @@ npm run dev
 
 Abra `http://localhost:3000`.
 
-No painel do Supabase, em Authentication, ligue a confirmação de e-mail e a senha mínima de 10 caracteres. O `supabase/config.toml` descreve o mesmo para o CLI local.
+No painel do Supabase, a senha mínima fica em 10 caracteres. O `supabase/config.toml` descreve o mesmo para o CLI local. O convite confirma o e-mail no servidor, sem SMTP.
+
+## Acesso só por convite
+
+`/cadastro` responde "Acesso só por convite" e não cria conta. Login, aceite de convite e o convite dentro do app continuam.
+
+A tela "Esqueci a senha" está oculta: o envio depende de SMTP, que ainda não está configurado. A ação também recusa o envio enquanto `PASSWORD_RESET_ENABLED` for `false` em `src/server/access.ts`.
+
+Para reativar a recuperação por e-mail:
+
+1. No Supabase, em Authentication → Emails → SMTP Settings, preencha host, porta, usuário, senha e remetente. Envie o e-mail de teste do painel.
+2. Em `src/server/access.ts`, mude `PASSWORD_RESET_ENABLED` para `true`.
+3. O link "Esqueci a senha" volta no login e `/esqueci-senha` volta a chamar `resetPasswordForEmail`, com retorno em `/auth/callback?next=/login`.
 
 Aplique as migrations no projeto hospedado (SQL editor ou CLI):
 

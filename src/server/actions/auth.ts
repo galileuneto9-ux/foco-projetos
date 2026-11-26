@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { acceptInviteSchema, loginSchema, signupSchema } from "@/domain/schemas";
+import { INVITE_ONLY_MESSAGE, OPEN_SIGNUP, PASSWORD_RESET_ENABLED } from "@/server/access";
 import { signupErrorMessage } from "@/server/auth-messages";
 import { createClient } from "@/lib/supabase/server";
 import { dbError } from "@/server/errors";
@@ -11,6 +12,7 @@ function appUrl() {
 }
 
 export async function signUp(input: unknown) {
+  if (!OPEN_SIGNUP) return { ok: false as const, message: INVITE_ONLY_MESSAGE };
   const parsed = signupSchema.safeParse(input);
   if (!parsed.success) return { ok: false as const, message: parsed.error.issues[0]?.message ?? "Confira os campos." };
   const supabase = await createClient();
@@ -47,6 +49,9 @@ export async function signIn(input: unknown) {
 }
 
 export async function requestPasswordReset(input: unknown) {
+  if (!PASSWORD_RESET_ENABLED) {
+    return { ok: false as const, message: "A recuperação de senha por e-mail está desligada." };
+  }
   const email = typeof input === "object" && input && "email" in input ? String(input.email) : "";
   const parsed = loginSchema.shape.email.safeParse(email);
   if (!parsed.success) return { ok: false as const, message: "Informe um e-mail válido." };
