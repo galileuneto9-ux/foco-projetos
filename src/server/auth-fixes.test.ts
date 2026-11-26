@@ -8,6 +8,7 @@ vi.mock("@/lib/supabase/server", () => ({
 import { requestPasswordReset, signUp } from "@/server/actions/auth";
 import { INVITE_ONLY_MESSAGE, OPEN_SIGNUP, PASSWORD_RESET_ENABLED } from "@/server/access";
 import { LINK_EXPIRED_MESSAGE, signupErrorMessage, teamFormDefaults, teamFromMetadata } from "@/server/auth-messages";
+import { createTeamResult } from "@/server/create-team-result";
 import { newPasswordSchema } from "@/domain/schemas";
 import { callbackNextPath, safeNextPath } from "@/server/safe-next";
 import { securityHeaders } from "@/server/security-headers";
@@ -61,6 +62,17 @@ describe("redirect depois do login", () => {
       new Request(`${ORIGIN}/auth/callback?type=recovery&code=valido&next=${encodeURIComponent("//evil.example")}`),
     );
     expect(fresh.headers.get("location")).toBe(`${ORIGIN}/login?erro=link_expirado`);
+  });
+});
+
+describe("criar o time", () => {
+  it("entra no app depois de criar e também se a pessoa já tem time", () => {
+    expect(createTeamResult({ alreadyMember: false, error: null })).toEqual({ ok: true });
+    expect(createTeamResult({ alreadyMember: true, error: null })).toEqual({ ok: true });
+    expect(createTeamResult({ alreadyMember: false, error: { message: "JA_TEM_TIME" } })).toEqual({ ok: true });
+    const failed = createTeamResult({ alreadyMember: false, error: { message: "NOME_INVALIDO" } });
+    expect(failed.ok).toBe(false);
+    if (!failed.ok) expect(failed.message).toBe("Confira o nome.");
   });
 });
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { acceptInviteSchema, loginSchema, signupSchema } from "@/domain/schemas";
@@ -97,6 +98,7 @@ export function ResetForm() {
 }
 
 export function CreateTeamForm({ displayName, teamName }: { displayName: string; teamName: string }) {
+  const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
   const form = useForm({ defaultValues: { displayName, teamName } });
   return (
@@ -104,7 +106,12 @@ export function CreateTeamForm({ displayName, teamName }: { displayName: string;
       className="grid gap-4"
       onSubmit={form.handleSubmit(async (values) => {
         const result = await createTeam(values);
-        if (result && !result.ok) setMessage(result.message);
+        if (result && !result.ok) {
+          setMessage(result.message);
+          return;
+        }
+        router.replace("/app");
+        router.refresh();
       })}
     >
       <Field label="Seu nome" htmlFor="displayName">
@@ -114,8 +121,8 @@ export function CreateTeamForm({ displayName, teamName }: { displayName: string;
         <Input id="teamName" {...form.register("teamName")} />
       </Field>
       <Message text={message} />
-      <Button type="submit" size="block">
-        Criar time
+      <Button type="submit" size="block" disabled={form.formState.isSubmitting}>
+        {form.formState.isSubmitting ? "Criando…" : "Criar time"}
       </Button>
     </form>
   );

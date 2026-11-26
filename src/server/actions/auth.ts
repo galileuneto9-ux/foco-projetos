@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { acceptInviteSchema, loginSchema, newPasswordSchema, signupSchema } from "@/domain/schemas";
 import { INVITE_ONLY_MESSAGE, OPEN_SIGNUP, PASSWORD_RESET_ENABLED } from "@/server/access";
 import { signupErrorMessage } from "@/server/auth-messages";
+import { createTeamResult } from "@/server/create-team-result";
 import { createClient } from "@/lib/supabase/server";
 import { dbError } from "@/server/errors";
 
@@ -81,9 +82,12 @@ export async function createTeam(input: unknown) {
   const name = typeof input === "object" && input && "teamName" in input ? String(input.teamName) : "";
   const display = typeof input === "object" && input && "displayName" in input ? String(input.displayName) : "";
   const supabase = await createClient();
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) redirect("/login");
+  const { data: existing } = await supabase.from("team_members").select("user_id").eq("user_id", auth.user.id).maybeSingle();
+  if (existing) return { ok: true as const };
   const { error } = await supabase.rpc("create_team", { p_name: name.trim(), p_display_name: display.trim() });
-  if (error) return { ok: false as const, message: dbError(error, "Não foi possível criar o time.") };
-  redirect("/app");
+  return createTeamResult({ alreadyMember: false, error });
 }
 
 export async function acceptInvite(input: unknown) {
